@@ -31,6 +31,11 @@ class Settings(BaseSettings):
     redis_url: str = ""
     cors_origins: str = "http://localhost:5173"
 
+    # JWT 鉴权
+    jwt_secret: str = "change-me-in-production-please"
+    jwt_algorithm: str = "HS256"
+    jwt_access_expire_minutes: int = 120
+
     @property
     def database_url(self) -> str:
         """psycopg3 异步连接串：postgresql+psycopg://。"""

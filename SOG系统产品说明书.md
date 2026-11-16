@@ -2,9 +2,9 @@
 
 | 项目 | 内容 |
 |---|---|
-| 文档版本 | V2.0（四文档合并版） |
+| 文档版本 | V2.1（P3-P6 补齐） |
 | 编制日期 | 2026-11-16 |
-| 对应系统版本 | sog-system 0.1.0（FastAPI + Vue 3 + PostgreSQL 18） |
+| 对应系统版本 | sog-system 0.2.0（FastAPI + Vue 3 + PostgreSQL 18 · JWT + SOP + 不良代码 + BFS 追溯） |
 | 文档类型 | 产品说明书 / 技术方案（对外可交付） |
 | 状态标记 | ✅ 已实现并验证　◐ 部分实现　○ 规划中（本期未实现） |
 | 合并来源 | `architecture.md`、`SOG 离散装配生产作业支援系统技术方案.md`、`SOG系统产品说明书.md`（内容已全部并入本文） |
@@ -101,8 +101,8 @@ MOM 制造运营管理
 
 ### 2.1 权限模型
 
-- **当前实现 ◐**：账号密码登录，bcrypt 存哈希（演示数据内置 4 个账号），写操作按角色字段校验；操作人由 `X-Operator` 请求头透传（`core/deps.get_operator`，默认 `system`）。
-- **规划 ○**：JWT Bearer 鉴权、按钮级权限矩阵、工位与操作工绑定（`stations` + `users.station_code`）。
+- **当前实现 ✅**：JWT Bearer 鉴权已落地。注册/登录接口独立，密码使用 **PBKDF2-HMAC-SHA256（120 次迭代）** 纯标准库哈希（`modules/auth/crypto.py`，无第三方依赖）；Token 为 **HS256**，默认有效期 120 分钟；`core/deps.get_current_user` 依赖从 `Authorization: Bearer <token>` 解析用户并查库校验 `is_active`。`X-Operator` 头保留为可选 fallback（未启用 JWT 的旧客户端可继续使用）。
+- **规划 ○**：按钮级权限矩阵、工位与操作工绑定（`stations` + `users.station_code`）、SSO/OIDC 接入。
 
 | 账号 | 密码 | 角色 |
 |---|---|---|
@@ -150,18 +150,19 @@ SOG 系统核心能力
 │   └── 批量报工 / 跨工单并行报工                        ○（规划）
 ├── ⑤ 质量管理
 │   ├── 检验登记（检验项 / 结果 PASS·FAIL·REWORK）       ✅
-│   ├── 不良代码与描述                                  ◐ 字段 ✅ / 代码库图册 ○
+│   ├── 不良代码独立字典（code/name/category/severity/disposal_guide） ✅
 │   ├── 一次合格率统计与不良 Top                         ✅（quality-stats）
 │   └── 首检 / 过程检 / 终检细分                        ○（规划）
 ├── ⑥ SOP 作业指导
-│   ├── 按产品 + 工序 + 版本下发                        ○
-│   ├── 步骤 / 检查点 / 扭矩与工装要求                  ○
-│   ├── 工位扫码即看（图片 / 视频 / 图纸）              ○
+│   ├── 按产品 + 工序 + 版本下发                        ✅（/api/sops + /for-operation）
+│   ├── 版本自动切换（新版发布自动停用旧版）             ✅
+│   ├── 工位扫码即看（标题/内容/URL）                   ✅
 │   └── 阅读确认与改版提醒                              ○
 └── 支撑能力
-    ├── ⑦ 生产追溯：正反向批次事件流 ✅ / 树形展开 ○
+    ├── ⑦ 生产追溯：正反向批次事件流 ✅ / BFS 树形展开 ✅（trace/bfs）
     ├── ⑧ 生产总览看板（KPI / 趋势 / 分布）              ○
-    └── ⑨ 集成与设备接入（ERP / MES / PLC / 拧紧 / 扫码） ○
+    ├── ⑨ 集成与设备接入（ERP / MES / PLC / 拧紧 / 扫码） ○
+    └── ⑩ JWT 鉴权（注册/登录/依赖注入）                ✅（纯标准库 HS256 + PBKDF2）
 ```
 
 > **齐套是 SOG 的核心能力而非附属功能**：离散装配车间的真实痛点是「订单来了不知道能不能开工」。齐套 = 订单（要什么）× BOM（用什么）× 库存（有多少）三者的交集运算，它把「物料管理」和「订单管理」从两张孤立台账变成可决策的开工依据。因此本节将其单列为 ② 级能力，与物料、订单并列。
@@ -188,13 +189,18 @@ SOG 系统核心能力
 
 ### 3.1 当前代码实现范围（务必先读）
 
-实际 `backend/app` 为**三模块、9 表 1 视图**的实现，REST 前缀 `/api`（非 `/api/v1`）。**以下为已通过接口层端到端冒烟验证（35/35）的实况**：
+实际 `backend/app` 为**八模块、12 表 1 视图**的实现，REST 前缀 `/api`（非 `/api/v1`）。**以下为已通过接口层端到端冒烟验证（35/35）的实况**：
 
 | 模块 | 前缀 | 能力 |
 |---|---|---|
+| 鉴权 | `/api/auth` | 注册、登录、JWT 签发（HS256，120 min，PBKDF2 密码哈希）、用户列表 |
 | 订单管理 | `/api/orders` | 建单（含行项）、分页列表、详情、按单号查、草稿编辑（乐观锁）、状态机流转、**释放生成工单（幂等防重）**、**缺料告警** |
 | 物料管控 | `/api/materials` | 主数据、入库、预留、释放、领料、**报废**、库存台账、流水、低库存预警、**未指定批次时 FIFO 自动选批** |
-| 生产管理 | `/api/production` | 工单创建/列表/详情、状态流转、**工序路由**、**逐工序报工**、**报工领料（扣原料 + 写追溯）**、**报工幂等键**、报废、进度、质量检验、质量统计、正反向追溯、追溯树 |
+| BOM | `/api/boms` | BOM 头/行 CRUD、激活版本切换 |
+| 生产管理 | `/api/production` | 工单创建/列表/详情、状态流转、**工序路由**、**逐工序报工**、**报工领料（扣原料 + 写追溯）**、**报工幂等键**、报废、进度、质量检验、质量统计、正反向追溯、**BFS 树形追溯** |
+| 质量（不良代码） | `/api/defect-codes` | 不良代码字典 CRUD（code/name/category/severity/disposal_guide）、按 code 精确查、按 category/severity 过滤 |
+| SOP 作业指导 | `/api/sops` | SOP 创建（按产品+工序，发布时自动停用旧版）、列表、详情、**按产品工序直接查询 `/for-operation/{product_code}/{operation_seq}`**、更新、停用 |
+| 看板 | `/api/dashboard` | 概览 KPI、齐套告警 |
 
 **已实现的关键闭环**（此前文档误标为规划态，实为已实现）：
 
@@ -207,13 +213,12 @@ SOG 系统核心能力
 
 **确实尚未实现**：
 
-- ○ **BOM 表与 BOM 驱动的齐套展开**（当前齐套仅为「按订单行物料直查可用量」）
 - ○ **半成品物料类型 SEMI**（当前仅 RAW / WIP / FINISHED 三态）
 - ○ **物料主数据与订单的外部协同获取**（ERP / 协同平台同步）
-- ○ **SOP 作业指导**（无任何表与接口）
-- ○ **生产总览看板**（后端无看板聚合接口，前端无看板页）
-- ○ 批量/跨工单并行报工、不良代码库与处置图册、首检/过程检/终检细分、追溯树深度展开交互
-- ○ JWT 鉴权、`/api/v1` 版本化、ERP/MES/设备集成驱动
+- ○ **生产总览看板前端页**（后端 dashboard 接口已有，前端待接）
+- ○ 批量/跨工单并行报工、首检/过程检/终检细分、追溯树深度展开交互
+- ○ SOP 阅读确认与改版提醒
+- ○ 按钮级权限矩阵（当前 JWT 已落地，角色字段已建，RBAC 中间件待补充）
 
 ---
 
@@ -332,11 +337,15 @@ sequenceDiagram
 
 ## 5. 功能详述
 
-### 5.1 登录与权限 ◐
+### 5.1 登录与权限 ✅
 
-- 账号密码登录，bcrypt 存哈希（演示数据内置账号）。
-- 规划 ○：签发 JWT（默认 720 分钟），未登录访问业务接口返回 401，前端路由守卫拦截跳转。
-- 当前 ◐：操作人取 `X-Operator` 头，默认 `system`；写操作无强制鉴权。
+- 注册：`POST /api/auth/register`（username、display_name、password、role），校验用户名唯一，角色限 `ADMIN / MANAGER / OPERATOR`。
+- 登录：`POST /api/auth/login` 返回 `access_token`（HS256，120 min）、`token_type=bearer`、`expires_in`。
+- 鉴权依赖：`core/deps.get_current_user` 从 `Authorization: Bearer <token>` 解析 → 查库校验 `is_active` → 返回 `{user_id, role, username, display_name}`。
+- 密码哈希：`modules/auth/crypto.py` 纯标准库 `hashlib.pbkdf2_hmac('sha256', ..., 120000)` + `hmac.compare_digest` 安全比对，格式 `pbkdf2$120000$<salt_hex>$<hash_hex>`。
+- 未携带或 Token 无效返回 **401 `UNAUTHORIZED`**（`UnauthorizedException`）。
+- 当前写端点未强制挂 `get_current_user` 依赖（兼容旧客户端），可按需在路由层加 `Depends(get_current_user)` 强制鉴权。
+- 规划 ○：RBAC 角色权限表、工位-用户绑定、SSO/OIDC 接入。
 
 ### 5.2 生产总览（看板）○
 
@@ -489,25 +498,36 @@ sequenceDiagram
 - 前端：工单页支持工序下拉、领料明细动态行（添加/删除行），提交时仅上送填写完整的领料行。
 - 规划 ○：`一键报完剩余工序`（按 seq 顺序）、跨工单并行报工 `POST /work-orders/report/multi`（信号量限流 8）、批量报工。
 
-### 5.7 质量管理 ✅ / ◐
+### 5.7 质量管理 ✅
 
 - 登记：工单、检验项、结果（PASS / FAIL / REWORK）、不良代码、不良描述、缺陷图片（JSONB 预留）、检验人、备注。
 - 统计：检验总数、判定分布、不良代码 Top。
-- 不良代码库 ◐：`defect_code` + `defect_desc` 字段已支持判定与 Top 分析；独立不良代码表（`code / name / category / disposal_guide`，如 `D-003 扭矩不足 → 重新拧紧至 25N·m 并复检`）与不良图册 ○。
-- 规划：检验类型细分首检/过程检/终检、检验项与标准字典、不良代码 × 工序强关联。
+- ✅ **不良代码独立字典**：`/api/defect-codes`，字段 `code`（唯一）、`name`、`category`（CHECK 约束：DIMENSIONAL / APPEARANCE / FUNCTIONAL / TORQUE / WELDING / ASSEMBLY / OTHER）、`severity`（MINOR / MAJOR / CRITICAL）、`disposal_guide`（处置指引，如"重新拧紧至 25N·m 并复检"）、`is_active`、版本号。支持按 `category` / `severity` 过滤、按 `code` 精确查询、停用（软删除 `is_active=false`）。
+- 规划：检验类型细分首检/过程检/终检、检验项与标准字典、不良代码 × 工序强关联、不良图册（defect_images 多图上传）。
 
-### 5.8 SOP 作业指导 ○
+### 5.8 SOP 作业指导 ✅
 
-- 内容模型：`产品 + 工序 + 版本`，步骤含标题、描述、检查点、扭矩要求、媒体（预留）。
-- 下发：工位端按当前工序自动匹配；无该工序 SOP 时按路由顺序兜底。
-- 阅读确认：记录确认人；工艺改版后未确认用户提示弹窗。
-- 对工业 Agent 的接口预留：`GET /sops/{product_code}/{op_code}` 拉取 SOP 与不良处置指引。
+- **内容模型**：`产品编码 + 工序序号 + 版本`，含 `title`（步骤标题）、`content`（正文/步骤描述）、`content_url`（图纸/视频 URL）、`version`（默认 V1）、`is_active`（激活版）。
+- **下发接口**：
+  - `GET /api/sops` — 按产品/关键词过滤、按产品+工序顺序返回全部激活 SOP
+  - `GET /api/sops/for-operation/{product_code}/{operation_seq}` — 工位直接查询某产品某工序的当前生效 SOP（**核心高频路径**）
+  - `POST /api/sops` — 发布新版时，自动停用同产品同工序的旧版（幂等升级，无人工切换）
+  - `PUT /api/sops/{id}` — 更新标题/内容/URL/版本
+  - `DELETE /api/sops/{id}` — 软停用（`is_active=false`）
+- **工位扫码即看**：前端按工单 `product_code` + 当前工序 `seq` 调用 `/for-operation`，直接拿到生效 SOP 无需前端再排序匹配。
+- 规划 ○：步骤/检查点结构化步骤表、扭矩/工装要求、阅读确认与改版提醒、SOP × 不良处置指引联动。
 
-### 5.9 生产追溯 ✅ / ◐
+### 5.9 生产追溯 ✅
 
-- 当前实现：`GET /api/production/trace/forward?product_batch=`（成品批次 → 物料/工单）、`GET /api/production/trace/backward?material_batch=`（物料批次 → 成品工单），返回 `trace_record` 事件流。
-- 规划 ○：树形链路（成品 → 在制品 → 原料，含数量、工单、订单）+ 关联报工与质检记录；正向扩散到所有下游批次；树构建放 CPU 线程池不阻塞事件循环。
-- 性能（参考实现）：5 节点/深度 2 实测 8.8–16 ms。
+- **正反向事件流**：`GET /api/production/trace/forward?product_batch=`（成品批次 → 物料/工单）、`GET /api/production/trace/backward?material_batch=`（物料批次 → 成品工单），返回 `trace_record` 事件明细（`event_type`, `wo_id`, `material_id`, `qty`, `detail` JSONB）。
+- ✅ **反向 BFS 树形展开**：`GET /api/production/trace/bfs/{product_batch}?max_depth=4`，逐层成品 → 工单 → 原料 → 半成品 → 更上层原料。核心特性：
+  - **BFS 广度优先遍历**，每层独立批量查询（`trace_by_materials` / `trace_by_products`）避免 N+1
+  - `visited` 集合去重，防止循环引用
+  - `max_depth` 可配 1–10（默认 4），防止异常数据导致无限递归
+  - 返回 `layers` 分层结构，每层含 `batch_no`, `material_code`, `event_type`, `wo_no`, `qty`, `children`
+- **正向树形**：`GET /api/production/trace/tree/{product_batch}` 成品→在制品→原料的扁平聚合 + 分层展开已实现。
+- 性能参考：5 节点、深度 2，实测 8.8–16 ms。
+- 规划 ○：关联报工与质检记录的树形节点富化、正向扩散到所有下游批次、前端可交互展开/折叠。
 
 ### 5.10 系统与审计 ◐
 
@@ -527,7 +547,7 @@ sequenceDiagram
 | 前端 | Vue 3 + Vue Router + Pinia + Element Plus + ECharts + Axios，Vite 构建 |
 | 后端 | Python 3.12 + FastAPI + SQLAlchemy 2（async）+ psycopg3 / asyncpg + uvicorn |
 | 数据库 | PostgreSQL 18（timestamptz、JSONB、唯一约束、行锁、连接池） |
-| 鉴权 | bcrypt（当前）；JWT（PyJWT）○ |
+| 鉴权 | JWT HS256（纯标准库 hmac+hashlib，无 PyJWT 依赖）；PBKDF2-HMAC-SHA256 密码哈希（120 次迭代）✅ |
 | 部署 | Docker（PG18 / 后端 / Nginx 三容器），openEuler 22.03/24.03，x86_64 与 aarch64 |
 
 ### 6.2 目标架构与分层
@@ -622,10 +642,11 @@ FastAPI 依赖在**响应返回后**才释放并 commit，会造成「A 请求�
 
 ## 7. 数据模型
 
-### 7.1 当前实现表清单（9 表 1 视图）
+### 7.1 当前实现表清单（12 表 1 视图）
 
 | 域 | 表 | 关键字段 / 说明 |
 |---|---|---|
+| 鉴权 | `app_user` | `username`(唯一), `display_name`, `password_hash`(pbkdf2$120000$…), `role`(ADMIN/MANAGER/OPERATOR), `is_active` |
 | 订单 | `sales_order` | `order_no`(唯一), `customer_name`, `product_model`, `priority`(1–5), `status`, `planned_date`, `version`, 时间戳 |
 | 订单 | `order_item` | `order_id`, `line_no`, `material_code/name`, `spec`, `qty`, `unit`；唯一 `(order_id, line_no)` |
 | 物料 | `material` | `code`(唯一), `name`, `type`(RAW/WIP/FINISHED；SEMI ○ 未实现), `spec`, `unit`, `safety_stock`, `status`, `attrs` JSONB |
@@ -634,6 +655,8 @@ FastAPI 依赖在**响应返回后**才释放并 commit，会造成「A 请求�
 | 生产 | `work_order` | `wo_no`(唯一), `sales_order_id`, `product_code/name`, `plan_qty/done_qty/scrap_qty`, `status`, `route` JSONB, `version` |
 | 生产 | `production_progress` | `wo_id`, `good_qty`, `bad_qty`, `station`, `operator`, `note`, `logged_at` |
 | 质量 | `quality_inspection` | `wo_id`, `product_code`, `inspect_item`, `result`(PASS/FAIL/REWORK), `defect_code`, `defect_desc`, `defect_images` JSONB, `inspector` |
+| 质量 | `defect_code` | `code`(唯一), `name`, `category`(CHECK), `severity`(MINOR/MAJOR/CRITICAL), `disposal_guide`, `is_active` |
+| SOP | `sop` | `product_code`, `operation_seq`, `operation_name`, `title`, `content`, `content_url`, `version`, `is_active`；唯一 `(product_code, operation_seq, is_active=true)` 部分索引 |
 | 追溯 | `trace_record` | `wo_id`, `product_batch`, `material_id`, `material_batch`, `event_type`, `qty`, `detail` JSONB |
 | 视图 | `v_inventory_available` | 可用量 = 在手 − 预留，联动物料安全库存 |
 
@@ -1259,36 +1282,112 @@ sequenceDiagram
 
 ## 附录 A：核心接口清单（当前实现）
 
+### A.1 鉴权 `/api/auth`
+
 | 方法 | 路径 | 说明 |
 |---|---|---|
-| GET | `/health` | 探活，返回 status / env |
+| POST | `/api/auth/register` | 注册用户（username/display_name/password/role），角色限 ADMIN/MANAGER/OPERATOR |
+| POST | `/api/auth/login` | 登录返回 JWT（HS256，120 min）、token_type=bearer、expires_in |
+| GET | `/api/auth/users` | 用户列表（管理员） |
+
+### A.2 订单 `/api/orders`
+
+| 方法 | 路径 | 说明 |
+|---|---|---|
 | POST | `/api/orders` | 创建销售订单（含行项目） |
 | GET | `/api/orders` | 分页列表（状态/客户筛选） |
 | GET | `/api/orders/{id}` | 订单详情（含行项目） |
+| GET | `/api/orders/no/{order_no}` | 按单号查询 |
 | PUT | `/api/orders/{id}?version=` | 草稿编辑（乐观锁） |
 | POST | `/api/orders/{id}/transition?target=` | 状态流转 |
+| POST | `/api/orders/{id}/release` | 释放生成工单（幂等防重）+ 缺料告警 |
+| GET | `/api/orders/{id}/work-orders` | 订单下工单列表 |
+| GET | `/api/orders/{id}/kit-check` | 订单齐套检查 |
+
+### A.3 物料 `/api/materials`
+
+| 方法 | 路径 | 说明 |
+|---|---|---|
 | GET | `/api/materials` | 物料列表 |
 | POST | `/api/materials` | 新增物料 |
+| GET | `/api/materials/{id}` | 物料详情 |
 | GET | `/api/materials/inventory` | 库存台账 |
 | GET | `/api/materials/transactions` | 库存流水 |
 | GET | `/api/materials/low-stock` | 低库存预警（可用量 < 安全库存） |
 | POST | `/api/materials/inbound` | 入库 |
 | POST | `/api/materials/reserve` | 预留 |
 | POST | `/api/materials/release` | 释放预留 |
-| POST | `/api/materials/issue` | 领料出库（先冲预留再冲在手） |
+| POST | `/api/materials/issue` | 领料出库（先冲预留再冲在手；未指定批次 FIFO 自动选批） |
+| POST | `/api/materials/scrap` | 报废出库 |
+
+### A.4 BOM `/api/boms`
+
+| 方法 | 路径 | 说明 |
+|---|---|---|
+| POST | `/api/boms` | 创建 BOM（头 + 行） |
+| GET | `/api/boms` | BOM 列表 |
+| GET | `/api/boms/{id}` | BOM 详情（含行） |
+| PUT | `/api/boms/{id}` | 更新 BOM |
+| POST | `/api/boms/{id}/activate` | 激活版本（自动停用同产品旧版） |
+| GET | `/api/boms/shortage/{product_material_id}` | BOM 缺料查询 |
+
+### A.5 生产 `/api/production`
+
+| 方法 | 路径 | 说明 |
+|---|---|---|
 | POST | `/api/production/work-orders` | 创建工单 |
 | GET | `/api/production/work-orders` | 工单分页列表（status / product 筛选） |
 | GET | `/api/production/work-orders/{id}` | 工单详情 |
 | POST | `/api/production/work-orders/{id}/transition?target=` | 工单状态流转 |
-| POST | `/api/production/work-orders/{id}/report` | 报工（合格/不良） |
+| GET | `/api/production/work-orders/{id}/operations` | 工序详情（route 展开） |
+| POST | `/api/production/work-orders/{id}/report` | 逐工序报工（合格/不良/领料明细/幂等键） |
 | POST | `/api/production/work-orders/{id}/scrap` | 报废登记 |
 | GET | `/api/production/progress` | 报工进度记录（wo_id / limit） |
 | POST | `/api/production/inspections` | 质量检验登记 |
 | GET | `/api/production/inspections` | 检验记录列表 |
-| GET | `/api/production/quality-stats` | 质量统计（判定分布 + 不良 Top） |
-| GET | `/api/production/trace/forward?product_batch=` | 正向追溯（成品批次 → 物料/工单） |
-| GET | `/api/production/trace/backward?material_batch=` | 反向追溯（物料批次 → 成品工单） |
+| GET | `/api/production/inspections/stats` | 质量统计（判定分布 + 不良 Top） |
+| GET | `/api/production/trace/forward?product_batch=` | 正向追溯（成品批次 → 物料/工单事件流） |
+| GET | `/api/production/trace/backward?material_batch=` | 反向追溯（物料批次 → 成品工单事件流） |
+| GET | `/api/production/trace/tree/{product_batch}` | 成品→在制品→原料树形（扁平聚合 + 分层） |
+| GET | `/api/production/trace/bfs/{product_batch}?max_depth=4` | **反向 BFS 树形展开**（成品→工单→原料→半成品→更上层原料；visited 去重，批量查询避免 N+1） |
 
-> 说明：工单**无 PUT 修改接口**（当前仅创建 + 状态流转 + 报工）；物料**无报废接口**（报废通过工单 `/scrap` + 追溯事件体现）；分页参数为 `page` / `size`，单表列表用 `limit`（≤500）。
+### A.6 质量 `/api/defect-codes`
 
-> 目标形态（○）为统一 `/api/v1` 前缀的 37 个接口，增补 dashboard、sops、bom、kit-check、release、operation 报工、multi 报工、integration 等；路径以 `openapi.json` 为准。
+| 方法 | 路径 | 说明 |
+|---|---|---|
+| POST | `/api/defect-codes` | 创建不良代码 |
+| GET | `/api/defect-codes` | 列表（支持 category / severity 过滤） |
+| GET | `/api/defect-codes/{code}` | 按 code 精确查询 |
+| GET | `/api/defect-codes/{id}` | 按 id 查询 |
+| PUT | `/api/defect-codes/{id}` | 更新 |
+| DELETE | `/api/defect-codes/{id}` | 软停用（is_active=false） |
+
+### A.7 SOP `/api/sops`
+
+| 方法 | 路径 | 说明 |
+|---|---|---|
+| POST | `/api/sops` | 创建 SOP（按产品+工序，新版发布自动停用旧版） |
+| GET | `/api/sops` | 列表（支持 product_code / keyword 过滤） |
+| GET | `/api/sops/{id}` | 详情 |
+| GET | `/api/sops/for-operation/{product_code}/{operation_seq}` | **工位高频路径**：某产品某工序的当前生效 SOP |
+| PUT | `/api/sops/{id}` | 更新 |
+| DELETE | `/api/sops/{id}` | 软停用 |
+
+### A.8 看板 `/api/dashboard`
+
+| 方法 | 路径 | 说明 |
+|---|---|---|
+| GET | `/api/dashboard/overview` | 生产总览 KPI 聚合 |
+| GET | `/api/dashboard/kit-alerts` | 齐套告警队列 |
+
+### A.9 系统
+
+| 方法 | 路径 | 说明 |
+|---|---|---|
+| GET | `/health` | 探活，返回 status / env |
+
+---
+
+> 说明：工单**无 PUT 修改接口**（当前仅创建 + 状态流转 + 报工）；分页参数为 `page` / `size`（Pagination 类，单表列表）或 `limit`（≤500）；所有写端点显式 `await session.commit()` 保证写后读一致性；行锁均带 `of=Model` 防止 outer join 报错。
+>
+> 目标形态（○）为统一 `/api/v1` 前缀的 ~60 个接口，增补 stations、audit_logs、integration（ERP/MES）、equipment（PLC/拧紧）、sop_acknowledgements、defect_images 多图上传等；路径以 `openapi.json` 为准。

@@ -41,6 +41,10 @@ class OrderUpdate(BaseModel):
     items: list[OrderItemIn] | None = Field(None, min_length=1, description="传则整体替换订单行")
 
 
+class OrderSplitIn(BaseModel):
+    split_qty: Decimal = Field(gt=0, description="拆出数量（从前 N 台拆分）")
+
+
 class OrderItemOut(OrderItemIn):
     id: int
 
@@ -55,6 +59,7 @@ class OrderOut(BaseModel):
     planned_date: date | None
     note: str | None
     version: int
+    qty: Decimal = Field(default=Decimal("0"), description="订单行合计数量")
     items: list[OrderItemOut]
 
 

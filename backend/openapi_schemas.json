@@ -1,0 +1,3597 @@
+﻿{
+  "BomActivateOut": {
+    "properties": {
+      "bom": {
+        "$ref": "#/components/schemas/BomOut"
+      },
+      "deactivated_id": {
+        "anyOf": [
+          {
+            "type": "integer"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "title": "Deactivated Id"
+      }
+    },
+    "type": "object",
+    "required": [
+      "bom"
+    ],
+    "title": "BomActivateOut"
+  },
+  "BomCreate": {
+    "properties": {
+      "product_material_id": {
+        "type": "integer",
+        "title": "Product Material Id"
+      },
+      "version": {
+        "type": "string",
+        "title": "Version",
+        "default": "V1"
+      },
+      "remark": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "title": "Remark"
+      },
+      "is_active": {
+        "type": "boolean",
+        "title": "Is Active",
+        "default": true
+      },
+      "items": {
+        "items": {
+          "$ref": "#/components/schemas/BomItemIn"
+        },
+        "type": "array",
+        "minItems": 1,
+        "title": "Items"
+      }
+    },
+    "type": "object",
+    "required": [
+      "product_material_id",
+      "items"
+    ],
+    "title": "BomCreate"
+  },
+  "BomItemIn": {
+    "properties": {
+      "component_material_id": {
+        "type": "integer",
+        "title": "Component Material Id"
+      },
+      "qty": {
+        "type": "number",
+        "exclusiveMinimum": 0.0,
+        "title": "Qty"
+      },
+      "loss_rate": {
+        "type": "number",
+        "minimum": 0.0,
+        "title": "Loss Rate",
+        "default": 0
+      },
+      "seq": {
+        "type": "integer",
+        "minimum": 1.0,
+        "title": "Seq",
+        "default": 1
+      }
+    },
+    "type": "object",
+    "required": [
+      "component_material_id",
+      "qty"
+    ],
+    "title": "BomItemIn"
+  },
+  "BomItemOut": {
+    "properties": {
+      "id": {
+        "type": "integer",
+        "title": "Id"
+      },
+      "bom_id": {
+        "type": "integer",
+        "title": "Bom Id"
+      },
+      "component_material_id": {
+        "type": "integer",
+        "title": "Component Material Id"
+      },
+      "component_code": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "title": "Component Code"
+      },
+      "component_name": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "title": "Component Name"
+      },
+      "qty": {
+        "type": "number",
+        "title": "Qty"
+      },
+      "loss_rate": {
+        "type": "number",
+        "title": "Loss Rate"
+      },
+      "seq": {
+        "type": "integer",
+        "title": "Seq"
+      }
+    },
+    "type": "object",
+    "required": [
+      "id",
+      "bom_id",
+      "component_material_id",
+      "qty",
+      "loss_rate",
+      "seq"
+    ],
+    "title": "BomItemOut"
+  },
+  "BomListOut": {
+    "properties": {
+      "id": {
+        "type": "integer",
+        "title": "Id"
+      },
+      "product_material_id": {
+        "type": "integer",
+        "title": "Product Material Id"
+      },
+      "product_code": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "title": "Product Code"
+      },
+      "product_name": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "title": "Product Name"
+      },
+      "version": {
+        "type": "string",
+        "title": "Version"
+      },
+      "is_active": {
+        "type": "boolean",
+        "title": "Is Active"
+      },
+      "status": {
+        "type": "string",
+        "title": "Status"
+      },
+      "created_at": {
+        "type": "string",
+        "format": "date-time",
+        "title": "Created At"
+      },
+      "updated_at": {
+        "type": "string",
+        "format": "date-time",
+        "title": "Updated At"
+      },
+      "item_count": {
+        "type": "integer",
+        "title": "Item Count",
+        "default": 0
+      }
+    },
+    "type": "object",
+    "required": [
+      "id",
+      "product_material_id",
+      "version",
+      "is_active",
+      "status",
+      "created_at",
+      "updated_at"
+    ],
+    "title": "BomListOut"
+  },
+  "BomOut": {
+    "properties": {
+      "id": {
+        "type": "integer",
+        "title": "Id"
+      },
+      "product_material_id": {
+        "type": "integer",
+        "title": "Product Material Id"
+      },
+      "product_code": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "title": "Product Code"
+      },
+      "product_name": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "title": "Product Name"
+      },
+      "version": {
+        "type": "string",
+        "title": "Version"
+      },
+      "is_active": {
+        "type": "boolean",
+        "title": "Is Active"
+      },
+      "status": {
+        "type": "string",
+        "title": "Status"
+      },
+      "remark": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "title": "Remark"
+      },
+      "created_at": {
+        "type": "string",
+        "format": "date-time",
+        "title": "Created At"
+      },
+      "updated_at": {
+        "type": "string",
+        "format": "date-time",
+        "title": "Updated At"
+      },
+      "items": {
+        "items": {
+          "$ref": "#/components/schemas/BomItemOut"
+        },
+        "type": "array",
+        "title": "Items",
+        "default": []
+      }
+    },
+    "type": "object",
+    "required": [
+      "id",
+      "product_material_id",
+      "version",
+      "is_active",
+      "status",
+      "created_at",
+      "updated_at"
+    ],
+    "title": "BomOut"
+  },
+  "BomUpdate": {
+    "properties": {
+      "version": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "title": "Version"
+      },
+      "remark": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "title": "Remark"
+      },
+      "items": {
+        "anyOf": [
+          {
+            "items": {
+              "$ref": "#/components/schemas/BomItemIn"
+            },
+            "type": "array"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "title": "Items"
+      }
+    },
+    "type": "object",
+    "title": "BomUpdate"
+  },
+  "DefectCodeCreate": {
+    "properties": {
+      "code": {
+        "type": "string",
+        "maxLength": 32,
+        "minLength": 1,
+        "title": "Code"
+      },
+      "name": {
+        "type": "string",
+        "maxLength": 128,
+        "minLength": 1,
+        "title": "Name"
+      },
+      "category": {
+        "type": "string",
+        "maxLength": 32,
+        "title": "Category",
+        "default": "OTHER"
+      },
+      "severity": {
+        "type": "string",
+        "pattern": "^(CRITICAL|MAJOR|MINOR|SUGGESTION)$",
+        "title": "Severity",
+        "default": "MINOR"
+      },
+      "disposal_guide": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "title": "Disposal Guide"
+      }
+    },
+    "type": "object",
+    "required": [
+      "code",
+      "name"
+    ],
+    "title": "DefectCodeCreate"
+  },
+  "DefectCodeOut": {
+    "properties": {
+      "id": {
+        "type": "integer",
+        "title": "Id"
+      },
+      "code": {
+        "type": "string",
+        "title": "Code"
+      },
+      "name": {
+        "type": "string",
+        "title": "Name"
+      },
+      "category": {
+        "type": "string",
+        "title": "Category"
+      },
+      "severity": {
+        "type": "string",
+        "title": "Severity"
+      },
+      "disposal_guide": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "title": "Disposal Guide"
+      },
+      "is_active": {
+        "type": "boolean",
+        "title": "Is Active",
+        "default": true
+      },
+      "created_at": {
+        "type": "string",
+        "format": "date-time",
+        "title": "Created At"
+      },
+      "updated_at": {
+        "type": "string",
+        "format": "date-time",
+        "title": "Updated At"
+      }
+    },
+    "type": "object",
+    "required": [
+      "id",
+      "code",
+      "name",
+      "category",
+      "severity",
+      "created_at",
+      "updated_at"
+    ],
+    "title": "DefectCodeOut"
+  },
+  "DefectCodeUpdate": {
+    "properties": {
+      "name": {
+        "anyOf": [
+          {
+            "type": "string",
+            "maxLength": 128,
+            "minLength": 1
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "title": "Name"
+      },
+      "category": {
+        "anyOf": [
+          {
+            "type": "string",
+            "maxLength": 32
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "title": "Category"
+      },
+      "severity": {
+        "anyOf": [
+          {
+            "type": "string",
+            "pattern": "^(CRITICAL|MAJOR|MINOR|SUGGESTION)$"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "title": "Severity"
+      },
+      "disposal_guide": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "title": "Disposal Guide"
+      },
+      "is_active": {
+        "anyOf": [
+          {
+            "type": "boolean"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "title": "Is Active"
+      }
+    },
+    "type": "object",
+    "title": "DefectCodeUpdate"
+  },
+  "HTTPValidationError": {
+    "properties": {
+      "detail": {
+        "items": {
+          "$ref": "#/components/schemas/ValidationError"
+        },
+        "type": "array",
+        "title": "Detail"
+      }
+    },
+    "type": "object",
+    "title": "HTTPValidationError"
+  },
+  "InspectionIn": {
+    "properties": {
+      "wo_id": {
+        "anyOf": [
+          {
+            "type": "integer"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "title": "Wo Id"
+      },
+      "product_code": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "title": "Product Code"
+      },
+      "product_batch": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "title": "Product Batch"
+      },
+      "inspect_item": {
+        "type": "string",
+        "title": "Inspect Item"
+      },
+      "result": {
+        "type": "string",
+        "title": "Result",
+        "description": "PASS/FAIL/REWORK"
+      },
+      "defect_code": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "title": "Defect Code"
+      },
+      "defect_desc": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "title": "Defect Desc"
+      },
+      "defect_images": {
+        "items": {
+          "type": "string"
+        },
+        "type": "array",
+        "title": "Defect Images",
+        "default": []
+      },
+      "inspector": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "title": "Inspector"
+      },
+      "note": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "title": "Note"
+      }
+    },
+    "type": "object",
+    "required": [
+      "inspect_item",
+      "result"
+    ],
+    "title": "InspectionIn"
+  },
+  "InspectionOut": {
+    "properties": {
+      "wo_id": {
+        "anyOf": [
+          {
+            "type": "integer"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "title": "Wo Id"
+      },
+      "product_code": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "title": "Product Code"
+      },
+      "product_batch": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "title": "Product Batch"
+      },
+      "inspect_item": {
+        "type": "string",
+        "title": "Inspect Item"
+      },
+      "result": {
+        "type": "string",
+        "title": "Result",
+        "description": "PASS/FAIL/REWORK"
+      },
+      "defect_code": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "title": "Defect Code"
+      },
+      "defect_desc": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "title": "Defect Desc"
+      },
+      "defect_images": {
+        "items": {
+          "type": "string"
+        },
+        "type": "array",
+        "title": "Defect Images",
+        "default": []
+      },
+      "inspector": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "title": "Inspector"
+      },
+      "note": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "title": "Note"
+      },
+      "id": {
+        "type": "integer",
+        "title": "Id"
+      },
+      "inspected_at": {
+        "type": "string",
+        "format": "date-time",
+        "title": "Inspected At"
+      }
+    },
+    "type": "object",
+    "required": [
+      "inspect_item",
+      "result",
+      "id",
+      "inspected_at"
+    ],
+    "title": "InspectionOut"
+  },
+  "InventoryOut": {
+    "properties": {
+      "id": {
+        "type": "integer",
+        "title": "Id"
+      },
+      "material_id": {
+        "type": "integer",
+        "title": "Material Id"
+      },
+      "batch_no": {
+        "type": "string",
+        "title": "Batch No"
+      },
+      "location": {
+        "type": "string",
+        "title": "Location"
+      },
+      "qty_on_hand": {
+        "type": "string",
+        "title": "Qty On Hand"
+      },
+      "qty_reserved": {
+        "type": "string",
+        "title": "Qty Reserved"
+      },
+      "available": {
+        "type": "string",
+        "title": "Available"
+      },
+      "status": {
+        "type": "string",
+        "title": "Status"
+      }
+    },
+    "type": "object",
+    "required": [
+      "id",
+      "material_id",
+      "batch_no",
+      "location",
+      "qty_on_hand",
+      "qty_reserved",
+      "available",
+      "status"
+    ],
+    "title": "InventoryOut"
+  },
+  "LoginIn": {
+    "properties": {
+      "username": {
+        "type": "string",
+        "maxLength": 64,
+        "minLength": 1,
+        "title": "Username"
+      },
+      "password": {
+        "type": "string",
+        "maxLength": 128,
+        "minLength": 1,
+        "title": "Password"
+      }
+    },
+    "type": "object",
+    "required": [
+      "username",
+      "password"
+    ],
+    "title": "LoginIn"
+  },
+  "MaterialIn": {
+    "properties": {
+      "code": {
+        "type": "string",
+        "maxLength": 64,
+        "minLength": 1,
+        "title": "Code"
+      },
+      "name": {
+        "type": "string",
+        "maxLength": 128,
+        "minLength": 1,
+        "title": "Name"
+      },
+      "type": {
+        "type": "string",
+        "title": "Type",
+        "description": "RAW/WIP/FINISHED"
+      },
+      "spec": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "title": "Spec"
+      },
+      "unit": {
+        "type": "string",
+        "title": "Unit",
+        "default": "PCS"
+      },
+      "safety_stock": {
+        "anyOf": [
+          {
+            "type": "number",
+            "minimum": 0.0
+          },
+          {
+            "type": "string"
+          }
+        ],
+        "title": "Safety Stock",
+        "default": 0
+      },
+      "attrs": {
+        "additionalProperties": true,
+        "type": "object",
+        "title": "Attrs",
+        "default": {}
+      }
+    },
+    "type": "object",
+    "required": [
+      "code",
+      "name",
+      "type"
+    ],
+    "title": "MaterialIn"
+  },
+  "MaterialOut": {
+    "properties": {
+      "code": {
+        "type": "string",
+        "maxLength": 64,
+        "minLength": 1,
+        "title": "Code"
+      },
+      "name": {
+        "type": "string",
+        "maxLength": 128,
+        "minLength": 1,
+        "title": "Name"
+      },
+      "type": {
+        "type": "string",
+        "title": "Type",
+        "description": "RAW/WIP/FINISHED"
+      },
+      "spec": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "title": "Spec"
+      },
+      "unit": {
+        "type": "string",
+        "title": "Unit",
+        "default": "PCS"
+      },
+      "safety_stock": {
+        "type": "string",
+        "title": "Safety Stock",
+        "default": 0
+      },
+      "attrs": {
+        "additionalProperties": true,
+        "type": "object",
+        "title": "Attrs",
+        "default": {}
+      },
+      "id": {
+        "type": "integer",
+        "title": "Id"
+      },
+      "status": {
+        "type": "string",
+        "title": "Status"
+      }
+    },
+    "type": "object",
+    "required": [
+      "code",
+      "name",
+      "type",
+      "id",
+      "status"
+    ],
+    "title": "MaterialOut"
+  },
+  "MaterialUse": {
+    "properties": {
+      "material_id": {
+        "type": "integer",
+        "title": "Material Id"
+      },
+      "qty": {
+        "anyOf": [
+          {
+            "type": "number",
+            "exclusiveMinimum": 0.0
+          },
+          {
+            "type": "string"
+          }
+        ],
+        "title": "Qty"
+      },
+      "batch_no": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "title": "Batch No",
+        "description": "原料批次；为空时按 FIFO 自动选批"
+      },
+      "location": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "title": "Location"
+      }
+    },
+    "type": "object",
+    "required": [
+      "material_id",
+      "qty"
+    ],
+    "title": "MaterialUse"
+  },
+  "OperationStep": {
+    "properties": {
+      "seq": {
+        "type": "integer",
+        "title": "Seq"
+      },
+      "name": {
+        "type": "string",
+        "title": "Name"
+      },
+      "station": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "title": "Station"
+      },
+      "status": {
+        "type": "string",
+        "title": "Status",
+        "default": "pending"
+      },
+      "good_qty": {
+        "type": "string",
+        "title": "Good Qty",
+        "default": 0
+      },
+      "bad_qty": {
+        "type": "string",
+        "title": "Bad Qty",
+        "default": 0
+      },
+      "started_at": {
+        "anyOf": [
+          {
+            "type": "string",
+            "format": "date-time"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "title": "Started At"
+      },
+      "finished_at": {
+        "anyOf": [
+          {
+            "type": "string",
+            "format": "date-time"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "title": "Finished At"
+      }
+    },
+    "type": "object",
+    "required": [
+      "seq",
+      "name"
+    ],
+    "title": "OperationStep"
+  },
+  "OrderCreate": {
+    "properties": {
+      "customer_name": {
+        "type": "string",
+        "maxLength": 128,
+        "minLength": 1,
+        "title": "Customer Name"
+      },
+      "product_model": {
+        "type": "string",
+        "maxLength": 128,
+        "minLength": 1,
+        "title": "Product Model"
+      },
+      "priority": {
+        "type": "integer",
+        "maximum": 5.0,
+        "minimum": 1.0,
+        "title": "Priority",
+        "default": 3
+      },
+      "planned_date": {
+        "anyOf": [
+          {
+            "type": "string",
+            "format": "date"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "title": "Planned Date"
+      },
+      "note": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "title": "Note"
+      },
+      "items": {
+        "items": {
+          "$ref": "#/components/schemas/OrderItemIn"
+        },
+        "type": "array",
+        "minItems": 1,
+        "title": "Items"
+      }
+    },
+    "type": "object",
+    "required": [
+      "customer_name",
+      "product_model",
+      "items"
+    ],
+    "title": "OrderCreate"
+  },
+  "OrderItemIn": {
+    "properties": {
+      "line_no": {
+        "type": "integer",
+        "minimum": 1.0,
+        "title": "Line No",
+        "default": 1
+      },
+      "material_code": {
+        "type": "string",
+        "title": "Material Code"
+      },
+      "material_name": {
+        "type": "string",
+        "title": "Material Name"
+      },
+      "spec": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "title": "Spec"
+      },
+      "qty": {
+        "anyOf": [
+          {
+            "type": "number",
+            "exclusiveMinimum": 0.0
+          },
+          {
+            "type": "string"
+          }
+        ],
+        "title": "Qty"
+      },
+      "unit": {
+        "type": "string",
+        "title": "Unit",
+        "default": "PCS"
+      }
+    },
+    "type": "object",
+    "required": [
+      "material_code",
+      "material_name",
+      "qty"
+    ],
+    "title": "OrderItemIn"
+  },
+  "OrderItemOut": {
+    "properties": {
+      "line_no": {
+        "type": "integer",
+        "minimum": 1.0,
+        "title": "Line No",
+        "default": 1
+      },
+      "material_code": {
+        "type": "string",
+        "title": "Material Code"
+      },
+      "material_name": {
+        "type": "string",
+        "title": "Material Name"
+      },
+      "spec": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "title": "Spec"
+      },
+      "qty": {
+        "type": "string",
+        "title": "Qty"
+      },
+      "unit": {
+        "type": "string",
+        "title": "Unit",
+        "default": "PCS"
+      },
+      "id": {
+        "type": "integer",
+        "title": "Id"
+      }
+    },
+    "type": "object",
+    "required": [
+      "material_code",
+      "material_name",
+      "qty",
+      "id"
+    ],
+    "title": "OrderItemOut"
+  },
+  "OrderOut": {
+    "properties": {
+      "id": {
+        "type": "integer",
+        "title": "Id"
+      },
+      "order_no": {
+        "type": "string",
+        "title": "Order No"
+      },
+      "customer_name": {
+        "type": "string",
+        "title": "Customer Name"
+      },
+      "product_model": {
+        "type": "string",
+        "title": "Product Model"
+      },
+      "priority": {
+        "type": "integer",
+        "title": "Priority"
+      },
+      "status": {
+        "type": "string",
+        "title": "Status"
+      },
+      "planned_date": {
+        "anyOf": [
+          {
+            "type": "string",
+            "format": "date"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "title": "Planned Date"
+      },
+      "note": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "title": "Note"
+      },
+      "version": {
+        "type": "integer",
+        "title": "Version"
+      },
+      "items": {
+        "items": {
+          "$ref": "#/components/schemas/OrderItemOut"
+        },
+        "type": "array",
+        "title": "Items"
+      }
+    },
+    "type": "object",
+    "required": [
+      "id",
+      "order_no",
+      "customer_name",
+      "product_model",
+      "priority",
+      "status",
+      "planned_date",
+      "note",
+      "version",
+      "items"
+    ],
+    "title": "OrderOut"
+  },
+  "OrderStatus": {
+    "type": "string",
+    "enum": [
+      "DRAFT",
+      "RELEASED",
+      "IN_PROGRESS",
+      "COMPLETED",
+      "CLOSED",
+      "CANCELLED"
+    ],
+    "title": "OrderStatus"
+  },
+  "OrderUpdate": {
+    "properties": {
+      "customer_name": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "title": "Customer Name"
+      },
+      "product_model": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "title": "Product Model"
+      },
+      "priority": {
+        "anyOf": [
+          {
+            "type": "integer",
+            "maximum": 5.0,
+            "minimum": 1.0
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "title": "Priority"
+      },
+      "planned_date": {
+        "anyOf": [
+          {
+            "type": "string",
+            "format": "date"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "title": "Planned Date"
+      },
+      "note": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "title": "Note"
+      },
+      "items": {
+        "anyOf": [
+          {
+            "items": {
+              "$ref": "#/components/schemas/OrderItemIn"
+            },
+            "type": "array",
+            "minItems": 1
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "title": "Items",
+        "description": "传则整体替换订单行"
+      }
+    },
+    "type": "object",
+    "title": "OrderUpdate"
+  },
+  "PageData_InspectionOut_": {
+    "properties": {
+      "items": {
+        "items": {
+          "$ref": "#/components/schemas/InspectionOut"
+        },
+        "type": "array",
+        "title": "Items"
+      },
+      "total": {
+        "type": "integer",
+        "title": "Total"
+      },
+      "page": {
+        "type": "integer",
+        "title": "Page"
+      },
+      "size": {
+        "type": "integer",
+        "title": "Size"
+      }
+    },
+    "type": "object",
+    "required": [
+      "items",
+      "total",
+      "page",
+      "size"
+    ],
+    "title": "PageData[InspectionOut]"
+  },
+  "PageData_InventoryOut_": {
+    "properties": {
+      "items": {
+        "items": {
+          "$ref": "#/components/schemas/InventoryOut"
+        },
+        "type": "array",
+        "title": "Items"
+      },
+      "total": {
+        "type": "integer",
+        "title": "Total"
+      },
+      "page": {
+        "type": "integer",
+        "title": "Page"
+      },
+      "size": {
+        "type": "integer",
+        "title": "Size"
+      }
+    },
+    "type": "object",
+    "required": [
+      "items",
+      "total",
+      "page",
+      "size"
+    ],
+    "title": "PageData[InventoryOut]"
+  },
+  "PageData_MaterialOut_": {
+    "properties": {
+      "items": {
+        "items": {
+          "$ref": "#/components/schemas/MaterialOut"
+        },
+        "type": "array",
+        "title": "Items"
+      },
+      "total": {
+        "type": "integer",
+        "title": "Total"
+      },
+      "page": {
+        "type": "integer",
+        "title": "Page"
+      },
+      "size": {
+        "type": "integer",
+        "title": "Size"
+      }
+    },
+    "type": "object",
+    "required": [
+      "items",
+      "total",
+      "page",
+      "size"
+    ],
+    "title": "PageData[MaterialOut]"
+  },
+  "PageData_OrderOut_": {
+    "properties": {
+      "items": {
+        "items": {
+          "$ref": "#/components/schemas/OrderOut"
+        },
+        "type": "array",
+        "title": "Items"
+      },
+      "total": {
+        "type": "integer",
+        "title": "Total"
+      },
+      "page": {
+        "type": "integer",
+        "title": "Page"
+      },
+      "size": {
+        "type": "integer",
+        "title": "Size"
+      }
+    },
+    "type": "object",
+    "required": [
+      "items",
+      "total",
+      "page",
+      "size"
+    ],
+    "title": "PageData[OrderOut]"
+  },
+  "PageData_WorkOrderOut_": {
+    "properties": {
+      "items": {
+        "items": {
+          "$ref": "#/components/schemas/WorkOrderOut"
+        },
+        "type": "array",
+        "title": "Items"
+      },
+      "total": {
+        "type": "integer",
+        "title": "Total"
+      },
+      "page": {
+        "type": "integer",
+        "title": "Page"
+      },
+      "size": {
+        "type": "integer",
+        "title": "Size"
+      }
+    },
+    "type": "object",
+    "required": [
+      "items",
+      "total",
+      "page",
+      "size"
+    ],
+    "title": "PageData[WorkOrderOut]"
+  },
+  "RegisterIn": {
+    "properties": {
+      "username": {
+        "type": "string",
+        "maxLength": 64,
+        "minLength": 3,
+        "title": "Username"
+      },
+      "display_name": {
+        "type": "string",
+        "maxLength": 128,
+        "minLength": 1,
+        "title": "Display Name"
+      },
+      "password": {
+        "type": "string",
+        "maxLength": 128,
+        "minLength": 6,
+        "title": "Password"
+      },
+      "role": {
+        "type": "string",
+        "pattern": "^(ADMIN|MANAGER|OPERATOR)$",
+        "title": "Role",
+        "default": "OPERATOR"
+      }
+    },
+    "type": "object",
+    "required": [
+      "username",
+      "display_name",
+      "password"
+    ],
+    "title": "RegisterIn"
+  },
+  "ReleaseOut": {
+    "properties": {
+      "order_no": {
+        "type": "string",
+        "title": "Order No"
+      },
+      "status": {
+        "type": "string",
+        "title": "Status"
+      },
+      "version": {
+        "type": "integer",
+        "title": "Version"
+      },
+      "work_orders": {
+        "items": {
+          "$ref": "#/components/schemas/WorkOrderDraftOut"
+        },
+        "type": "array",
+        "title": "Work Orders"
+      },
+      "warnings": {
+        "items": {
+          "$ref": "#/components/schemas/app__modules__orders__schemas__ShortageOut"
+        },
+        "type": "array",
+        "title": "Warnings"
+      }
+    },
+    "type": "object",
+    "required": [
+      "order_no",
+      "status",
+      "version",
+      "work_orders",
+      "warnings"
+    ],
+    "title": "ReleaseOut"
+  },
+  "ReportOut": {
+    "properties": {
+      "work_order": {
+        "$ref": "#/components/schemas/WorkOrderOut"
+      },
+      "duplicated": {
+        "type": "boolean",
+        "title": "Duplicated",
+        "default": false
+      },
+      "finished": {
+        "type": "boolean",
+        "title": "Finished",
+        "default": false
+      },
+      "finished_qty": {
+        "type": "string",
+        "title": "Finished Qty",
+        "default": "0"
+      },
+      "finished_batch": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "title": "Finished Batch"
+      }
+    },
+    "type": "object",
+    "required": [
+      "work_order"
+    ],
+    "title": "ReportOut"
+  },
+  "ReportReq": {
+    "properties": {
+      "good_qty": {
+        "anyOf": [
+          {
+            "type": "number",
+            "minimum": 0.0
+          },
+          {
+            "type": "string"
+          }
+        ],
+        "title": "Good Qty"
+      },
+      "bad_qty": {
+        "anyOf": [
+          {
+            "type": "number",
+            "minimum": 0.0
+          },
+          {
+            "type": "string"
+          }
+        ],
+        "title": "Bad Qty",
+        "default": 0
+      },
+      "station": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "title": "Station"
+      },
+      "note": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "title": "Note"
+      },
+      "seq": {
+        "anyOf": [
+          {
+            "type": "integer"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "title": "Seq",
+        "description": "工序序号；为空则按当前进行中的工序"
+      },
+      "product_batch": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "title": "Product Batch",
+        "description": "成品批次；为空时末道自动生成 FG-{工单号}-{日期}"
+      },
+      "idempotency_key": {
+        "anyOf": [
+          {
+            "type": "string",
+            "maxLength": 64
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "title": "Idempotency Key",
+        "description": "幂等键，重复提交仅生效一次"
+      },
+      "materials": {
+        "items": {
+          "$ref": "#/components/schemas/MaterialUse"
+        },
+        "type": "array",
+        "title": "Materials",
+        "description": "本次消耗的原料；填则同步出库并写入正向追溯链"
+      }
+    },
+    "type": "object",
+    "required": [
+      "good_qty"
+    ],
+    "title": "ReportReq"
+  },
+  "Resp_BomActivateOut_": {
+    "properties": {
+      "code": {
+        "type": "integer",
+        "title": "Code",
+        "default": 0
+      },
+      "message": {
+        "type": "string",
+        "title": "Message",
+        "default": "ok"
+      },
+      "data": {
+        "anyOf": [
+          {
+            "$ref": "#/components/schemas/BomActivateOut"
+          },
+          {
+            "type": "null"
+          }
+        ]
+      }
+    },
+    "type": "object",
+    "title": "Resp[BomActivateOut]"
+  },
+  "Resp_BomOut_": {
+    "properties": {
+      "code": {
+        "type": "integer",
+        "title": "Code",
+        "default": 0
+      },
+      "message": {
+        "type": "string",
+        "title": "Message",
+        "default": "ok"
+      },
+      "data": {
+        "anyOf": [
+          {
+            "$ref": "#/components/schemas/BomOut"
+          },
+          {
+            "type": "null"
+          }
+        ]
+      }
+    },
+    "type": "object",
+    "title": "Resp[BomOut]"
+  },
+  "Resp_DefectCodeOut_": {
+    "properties": {
+      "code": {
+        "type": "integer",
+        "title": "Code",
+        "default": 0
+      },
+      "message": {
+        "type": "string",
+        "title": "Message",
+        "default": "ok"
+      },
+      "data": {
+        "anyOf": [
+          {
+            "$ref": "#/components/schemas/DefectCodeOut"
+          },
+          {
+            "type": "null"
+          }
+        ]
+      }
+    },
+    "type": "object",
+    "title": "Resp[DefectCodeOut]"
+  },
+  "Resp_InspectionOut_": {
+    "properties": {
+      "code": {
+        "type": "integer",
+        "title": "Code",
+        "default": 0
+      },
+      "message": {
+        "type": "string",
+        "title": "Message",
+        "default": "ok"
+      },
+      "data": {
+        "anyOf": [
+          {
+            "$ref": "#/components/schemas/InspectionOut"
+          },
+          {
+            "type": "null"
+          }
+        ]
+      }
+    },
+    "type": "object",
+    "title": "Resp[InspectionOut]"
+  },
+  "Resp_InventoryOut_": {
+    "properties": {
+      "code": {
+        "type": "integer",
+        "title": "Code",
+        "default": 0
+      },
+      "message": {
+        "type": "string",
+        "title": "Message",
+        "default": "ok"
+      },
+      "data": {
+        "anyOf": [
+          {
+            "$ref": "#/components/schemas/InventoryOut"
+          },
+          {
+            "type": "null"
+          }
+        ]
+      }
+    },
+    "type": "object",
+    "title": "Resp[InventoryOut]"
+  },
+  "Resp_MaterialOut_": {
+    "properties": {
+      "code": {
+        "type": "integer",
+        "title": "Code",
+        "default": 0
+      },
+      "message": {
+        "type": "string",
+        "title": "Message",
+        "default": "ok"
+      },
+      "data": {
+        "anyOf": [
+          {
+            "$ref": "#/components/schemas/MaterialOut"
+          },
+          {
+            "type": "null"
+          }
+        ]
+      }
+    },
+    "type": "object",
+    "title": "Resp[MaterialOut]"
+  },
+  "Resp_OrderOut_": {
+    "properties": {
+      "code": {
+        "type": "integer",
+        "title": "Code",
+        "default": 0
+      },
+      "message": {
+        "type": "string",
+        "title": "Message",
+        "default": "ok"
+      },
+      "data": {
+        "anyOf": [
+          {
+            "$ref": "#/components/schemas/OrderOut"
+          },
+          {
+            "type": "null"
+          }
+        ]
+      }
+    },
+    "type": "object",
+    "title": "Resp[OrderOut]"
+  },
+  "Resp_PageData_InspectionOut__": {
+    "properties": {
+      "code": {
+        "type": "integer",
+        "title": "Code",
+        "default": 0
+      },
+      "message": {
+        "type": "string",
+        "title": "Message",
+        "default": "ok"
+      },
+      "data": {
+        "anyOf": [
+          {
+            "$ref": "#/components/schemas/PageData_InspectionOut_"
+          },
+          {
+            "type": "null"
+          }
+        ]
+      }
+    },
+    "type": "object",
+    "title": "Resp[PageData[InspectionOut]]"
+  },
+  "Resp_PageData_InventoryOut__": {
+    "properties": {
+      "code": {
+        "type": "integer",
+        "title": "Code",
+        "default": 0
+      },
+      "message": {
+        "type": "string",
+        "title": "Message",
+        "default": "ok"
+      },
+      "data": {
+        "anyOf": [
+          {
+            "$ref": "#/components/schemas/PageData_InventoryOut_"
+          },
+          {
+            "type": "null"
+          }
+        ]
+      }
+    },
+    "type": "object",
+    "title": "Resp[PageData[InventoryOut]]"
+  },
+  "Resp_PageData_MaterialOut__": {
+    "properties": {
+      "code": {
+        "type": "integer",
+        "title": "Code",
+        "default": 0
+      },
+      "message": {
+        "type": "string",
+        "title": "Message",
+        "default": "ok"
+      },
+      "data": {
+        "anyOf": [
+          {
+            "$ref": "#/components/schemas/PageData_MaterialOut_"
+          },
+          {
+            "type": "null"
+          }
+        ]
+      }
+    },
+    "type": "object",
+    "title": "Resp[PageData[MaterialOut]]"
+  },
+  "Resp_PageData_OrderOut__": {
+    "properties": {
+      "code": {
+        "type": "integer",
+        "title": "Code",
+        "default": 0
+      },
+      "message": {
+        "type": "string",
+        "title": "Message",
+        "default": "ok"
+      },
+      "data": {
+        "anyOf": [
+          {
+            "$ref": "#/components/schemas/PageData_OrderOut_"
+          },
+          {
+            "type": "null"
+          }
+        ]
+      }
+    },
+    "type": "object",
+    "title": "Resp[PageData[OrderOut]]"
+  },
+  "Resp_PageData_WorkOrderOut__": {
+    "properties": {
+      "code": {
+        "type": "integer",
+        "title": "Code",
+        "default": 0
+      },
+      "message": {
+        "type": "string",
+        "title": "Message",
+        "default": "ok"
+      },
+      "data": {
+        "anyOf": [
+          {
+            "$ref": "#/components/schemas/PageData_WorkOrderOut_"
+          },
+          {
+            "type": "null"
+          }
+        ]
+      }
+    },
+    "type": "object",
+    "title": "Resp[PageData[WorkOrderOut]]"
+  },
+  "Resp_ReleaseOut_": {
+    "properties": {
+      "code": {
+        "type": "integer",
+        "title": "Code",
+        "default": 0
+      },
+      "message": {
+        "type": "string",
+        "title": "Message",
+        "default": "ok"
+      },
+      "data": {
+        "anyOf": [
+          {
+            "$ref": "#/components/schemas/ReleaseOut"
+          },
+          {
+            "type": "null"
+          }
+        ]
+      }
+    },
+    "type": "object",
+    "title": "Resp[ReleaseOut]"
+  },
+  "Resp_ReportOut_": {
+    "properties": {
+      "code": {
+        "type": "integer",
+        "title": "Code",
+        "default": 0
+      },
+      "message": {
+        "type": "string",
+        "title": "Message",
+        "default": "ok"
+      },
+      "data": {
+        "anyOf": [
+          {
+            "$ref": "#/components/schemas/ReportOut"
+          },
+          {
+            "type": "null"
+          }
+        ]
+      }
+    },
+    "type": "object",
+    "title": "Resp[ReportOut]"
+  },
+  "Resp_ShortageOut_": {
+    "properties": {
+      "code": {
+        "type": "integer",
+        "title": "Code",
+        "default": 0
+      },
+      "message": {
+        "type": "string",
+        "title": "Message",
+        "default": "ok"
+      },
+      "data": {
+        "anyOf": [
+          {
+            "$ref": "#/components/schemas/app__modules__bom__schemas__ShortageOut"
+          },
+          {
+            "type": "null"
+          }
+        ]
+      }
+    },
+    "type": "object",
+    "title": "Resp[ShortageOut]"
+  },
+  "Resp_SopOut_": {
+    "properties": {
+      "code": {
+        "type": "integer",
+        "title": "Code",
+        "default": 0
+      },
+      "message": {
+        "type": "string",
+        "title": "Message",
+        "default": "ok"
+      },
+      "data": {
+        "anyOf": [
+          {
+            "$ref": "#/components/schemas/SopOut"
+          },
+          {
+            "type": "null"
+          }
+        ]
+      }
+    },
+    "type": "object",
+    "title": "Resp[SopOut]"
+  },
+  "Resp_TokenOut_": {
+    "properties": {
+      "code": {
+        "type": "integer",
+        "title": "Code",
+        "default": 0
+      },
+      "message": {
+        "type": "string",
+        "title": "Message",
+        "default": "ok"
+      },
+      "data": {
+        "anyOf": [
+          {
+            "$ref": "#/components/schemas/TokenOut"
+          },
+          {
+            "type": "null"
+          }
+        ]
+      }
+    },
+    "type": "object",
+    "title": "Resp[TokenOut]"
+  },
+  "Resp_UserOut_": {
+    "properties": {
+      "code": {
+        "type": "integer",
+        "title": "Code",
+        "default": 0
+      },
+      "message": {
+        "type": "string",
+        "title": "Message",
+        "default": "ok"
+      },
+      "data": {
+        "anyOf": [
+          {
+            "$ref": "#/components/schemas/UserOut"
+          },
+          {
+            "type": "null"
+          }
+        ]
+      }
+    },
+    "type": "object",
+    "title": "Resp[UserOut]"
+  },
+  "Resp_WorkOrderOut_": {
+    "properties": {
+      "code": {
+        "type": "integer",
+        "title": "Code",
+        "default": 0
+      },
+      "message": {
+        "type": "string",
+        "title": "Message",
+        "default": "ok"
+      },
+      "data": {
+        "anyOf": [
+          {
+            "$ref": "#/components/schemas/WorkOrderOut"
+          },
+          {
+            "type": "null"
+          }
+        ]
+      }
+    },
+    "type": "object",
+    "title": "Resp[WorkOrderOut]"
+  },
+  "Resp_list_BomListOut__": {
+    "properties": {
+      "code": {
+        "type": "integer",
+        "title": "Code",
+        "default": 0
+      },
+      "message": {
+        "type": "string",
+        "title": "Message",
+        "default": "ok"
+      },
+      "data": {
+        "anyOf": [
+          {
+            "items": {
+              "$ref": "#/components/schemas/BomListOut"
+            },
+            "type": "array"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "title": "Data"
+      }
+    },
+    "type": "object",
+    "title": "Resp[list[BomListOut]]"
+  },
+  "Resp_list_DefectCodeOut__": {
+    "properties": {
+      "code": {
+        "type": "integer",
+        "title": "Code",
+        "default": 0
+      },
+      "message": {
+        "type": "string",
+        "title": "Message",
+        "default": "ok"
+      },
+      "data": {
+        "anyOf": [
+          {
+            "items": {
+              "$ref": "#/components/schemas/DefectCodeOut"
+            },
+            "type": "array"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "title": "Data"
+      }
+    },
+    "type": "object",
+    "title": "Resp[list[DefectCodeOut]]"
+  },
+  "Resp_list_OperationStep__": {
+    "properties": {
+      "code": {
+        "type": "integer",
+        "title": "Code",
+        "default": 0
+      },
+      "message": {
+        "type": "string",
+        "title": "Message",
+        "default": "ok"
+      },
+      "data": {
+        "anyOf": [
+          {
+            "items": {
+              "$ref": "#/components/schemas/OperationStep"
+            },
+            "type": "array"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "title": "Data"
+      }
+    },
+    "type": "object",
+    "title": "Resp[list[OperationStep]]"
+  },
+  "Resp_list_SopOut__": {
+    "properties": {
+      "code": {
+        "type": "integer",
+        "title": "Code",
+        "default": 0
+      },
+      "message": {
+        "type": "string",
+        "title": "Message",
+        "default": "ok"
+      },
+      "data": {
+        "anyOf": [
+          {
+            "items": {
+              "$ref": "#/components/schemas/SopOut"
+            },
+            "type": "array"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "title": "Data"
+      }
+    },
+    "type": "object",
+    "title": "Resp[list[SopOut]]"
+  },
+  "Resp_list_TraceOut__": {
+    "properties": {
+      "code": {
+        "type": "integer",
+        "title": "Code",
+        "default": 0
+      },
+      "message": {
+        "type": "string",
+        "title": "Message",
+        "default": "ok"
+      },
+      "data": {
+        "anyOf": [
+          {
+            "items": {
+              "$ref": "#/components/schemas/TraceOut"
+            },
+            "type": "array"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "title": "Data"
+      }
+    },
+    "type": "object",
+    "title": "Resp[list[TraceOut]]"
+  },
+  "Resp_list_TxnOut__": {
+    "properties": {
+      "code": {
+        "type": "integer",
+        "title": "Code",
+        "default": 0
+      },
+      "message": {
+        "type": "string",
+        "title": "Message",
+        "default": "ok"
+      },
+      "data": {
+        "anyOf": [
+          {
+            "items": {
+              "$ref": "#/components/schemas/TxnOut"
+            },
+            "type": "array"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "title": "Data"
+      }
+    },
+    "type": "object",
+    "title": "Resp[list[TxnOut]]"
+  },
+  "Resp_list_UserOut__": {
+    "properties": {
+      "code": {
+        "type": "integer",
+        "title": "Code",
+        "default": 0
+      },
+      "message": {
+        "type": "string",
+        "title": "Message",
+        "default": "ok"
+      },
+      "data": {
+        "anyOf": [
+          {
+            "items": {
+              "$ref": "#/components/schemas/UserOut"
+            },
+            "type": "array"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "title": "Data"
+      }
+    },
+    "type": "object",
+    "title": "Resp[list[UserOut]]"
+  },
+  "ScrapReq": {
+    "properties": {
+      "qty": {
+        "anyOf": [
+          {
+            "type": "number",
+            "exclusiveMinimum": 0.0
+          },
+          {
+            "type": "string"
+          }
+        ],
+        "title": "Qty"
+      },
+      "note": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "title": "Note"
+      },
+      "seq": {
+        "anyOf": [
+          {
+            "type": "integer"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "title": "Seq"
+      }
+    },
+    "type": "object",
+    "required": [
+      "qty"
+    ],
+    "title": "ScrapReq"
+  },
+  "ShortageItem": {
+    "properties": {
+      "component_material_id": {
+        "type": "integer",
+        "title": "Component Material Id"
+      },
+      "component_code": {
+        "type": "string",
+        "title": "Component Code"
+      },
+      "component_name": {
+        "type": "string",
+        "title": "Component Name"
+      },
+      "need_qty": {
+        "type": "number",
+        "title": "Need Qty"
+      },
+      "available_qty": {
+        "type": "number",
+        "title": "Available Qty"
+      },
+      "shortage_qty": {
+        "type": "number",
+        "title": "Shortage Qty"
+      }
+    },
+    "type": "object",
+    "required": [
+      "component_material_id",
+      "component_code",
+      "component_name",
+      "need_qty",
+      "available_qty",
+      "shortage_qty"
+    ],
+    "title": "ShortageItem"
+  },
+  "SopCreate": {
+    "properties": {
+      "product_code": {
+        "type": "string",
+        "maxLength": 64,
+        "minLength": 1,
+        "title": "Product Code"
+      },
+      "operation_seq": {
+        "type": "integer",
+        "minimum": 1.0,
+        "title": "Operation Seq"
+      },
+      "operation_name": {
+        "type": "string",
+        "maxLength": 64,
+        "minLength": 1,
+        "title": "Operation Name"
+      },
+      "title": {
+        "type": "string",
+        "maxLength": 256,
+        "minLength": 1,
+        "title": "Title"
+      },
+      "content": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "title": "Content"
+      },
+      "content_url": {
+        "anyOf": [
+          {
+            "type": "string",
+            "maxLength": 512
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "title": "Content Url"
+      },
+      "version": {
+        "type": "string",
+        "maxLength": 16,
+        "title": "Version",
+        "default": "V1"
+      }
+    },
+    "type": "object",
+    "required": [
+      "product_code",
+      "operation_seq",
+      "operation_name",
+      "title"
+    ],
+    "title": "SopCreate"
+  },
+  "SopOut": {
+    "properties": {
+      "id": {
+        "type": "integer",
+        "title": "Id"
+      },
+      "product_code": {
+        "type": "string",
+        "title": "Product Code"
+      },
+      "operation_seq": {
+        "type": "integer",
+        "title": "Operation Seq"
+      },
+      "operation_name": {
+        "type": "string",
+        "title": "Operation Name"
+      },
+      "title": {
+        "type": "string",
+        "title": "Title"
+      },
+      "content": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "title": "Content"
+      },
+      "content_url": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "title": "Content Url"
+      },
+      "version": {
+        "type": "string",
+        "title": "Version"
+      },
+      "is_active": {
+        "type": "boolean",
+        "title": "Is Active"
+      },
+      "created_at": {
+        "type": "string",
+        "format": "date-time",
+        "title": "Created At"
+      },
+      "updated_at": {
+        "type": "string",
+        "format": "date-time",
+        "title": "Updated At"
+      }
+    },
+    "type": "object",
+    "required": [
+      "id",
+      "product_code",
+      "operation_seq",
+      "operation_name",
+      "title",
+      "version",
+      "is_active",
+      "created_at",
+      "updated_at"
+    ],
+    "title": "SopOut"
+  },
+  "SopUpdate": {
+    "properties": {
+      "operation_name": {
+        "anyOf": [
+          {
+            "type": "string",
+            "maxLength": 64,
+            "minLength": 1
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "title": "Operation Name"
+      },
+      "title": {
+        "anyOf": [
+          {
+            "type": "string",
+            "maxLength": 256,
+            "minLength": 1
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "title": "Title"
+      },
+      "content": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "title": "Content"
+      },
+      "content_url": {
+        "anyOf": [
+          {
+            "type": "string",
+            "maxLength": 512
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "title": "Content Url"
+      },
+      "version": {
+        "anyOf": [
+          {
+            "type": "string",
+            "maxLength": 16
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "title": "Version"
+      },
+      "is_active": {
+        "anyOf": [
+          {
+            "type": "boolean"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "title": "Is Active"
+      }
+    },
+    "type": "object",
+    "title": "SopUpdate"
+  },
+  "StockIn": {
+    "properties": {
+      "material_id": {
+        "type": "integer",
+        "title": "Material Id"
+      },
+      "batch_no": {
+        "type": "string",
+        "minLength": 1,
+        "title": "Batch No"
+      },
+      "location": {
+        "type": "string",
+        "title": "Location",
+        "default": "WH-01"
+      },
+      "qty": {
+        "anyOf": [
+          {
+            "type": "number",
+            "exclusiveMinimum": 0.0
+          },
+          {
+            "type": "string"
+          }
+        ],
+        "title": "Qty"
+      },
+      "remark": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "title": "Remark"
+      }
+    },
+    "type": "object",
+    "required": [
+      "material_id",
+      "batch_no",
+      "qty"
+    ],
+    "title": "StockIn"
+  },
+  "StockOpReq": {
+    "properties": {
+      "material_id": {
+        "type": "integer",
+        "title": "Material Id"
+      },
+      "batch_no": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "title": "Batch No"
+      },
+      "location": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "title": "Location"
+      },
+      "qty": {
+        "anyOf": [
+          {
+            "type": "number",
+            "exclusiveMinimum": 0.0
+          },
+          {
+            "type": "string"
+          }
+        ],
+        "title": "Qty"
+      },
+      "ref_type": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "title": "Ref Type"
+      },
+      "ref_id": {
+        "anyOf": [
+          {
+            "type": "integer"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "title": "Ref Id"
+      },
+      "remark": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "title": "Remark"
+      }
+    },
+    "type": "object",
+    "required": [
+      "material_id",
+      "qty"
+    ],
+    "title": "StockOpReq"
+  },
+  "TokenOut": {
+    "properties": {
+      "access_token": {
+        "type": "string",
+        "title": "Access Token"
+      },
+      "token_type": {
+        "type": "string",
+        "title": "Token Type",
+        "default": "bearer"
+      },
+      "expires_in": {
+        "type": "integer",
+        "title": "Expires In"
+      }
+    },
+    "type": "object",
+    "required": [
+      "access_token",
+      "expires_in"
+    ],
+    "title": "TokenOut"
+  },
+  "TraceOut": {
+    "properties": {
+      "id": {
+        "type": "integer",
+        "title": "Id"
+      },
+      "wo_id": {
+        "anyOf": [
+          {
+            "type": "integer"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "title": "Wo Id"
+      },
+      "wo_no": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "title": "Wo No"
+      },
+      "product_batch": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "title": "Product Batch"
+      },
+      "material_id": {
+        "anyOf": [
+          {
+            "type": "integer"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "title": "Material Id"
+      },
+      "material_batch": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "title": "Material Batch"
+      },
+      "event_type": {
+        "type": "string",
+        "title": "Event Type"
+      },
+      "qty": {
+        "type": "string",
+        "title": "Qty"
+      },
+      "operator": {
+        "type": "string",
+        "title": "Operator"
+      },
+      "detail": {
+        "additionalProperties": true,
+        "type": "object",
+        "title": "Detail"
+      },
+      "created_at": {
+        "type": "string",
+        "format": "date-time",
+        "title": "Created At"
+      }
+    },
+    "type": "object",
+    "required": [
+      "id",
+      "wo_id",
+      "product_batch",
+      "material_id",
+      "material_batch",
+      "event_type",
+      "qty",
+      "operator",
+      "detail",
+      "created_at"
+    ],
+    "title": "TraceOut"
+  },
+  "TxnOut": {
+    "properties": {
+      "id": {
+        "type": "integer",
+        "title": "Id"
+      },
+      "material_id": {
+        "type": "integer",
+        "title": "Material Id"
+      },
+      "batch_no": {
+        "type": "string",
+        "title": "Batch No"
+      },
+      "txn_type": {
+        "type": "string",
+        "title": "Txn Type"
+      },
+      "qty": {
+        "type": "string",
+        "title": "Qty"
+      },
+      "balance_after": {
+        "type": "string",
+        "title": "Balance After"
+      },
+      "ref_type": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "title": "Ref Type"
+      },
+      "ref_id": {
+        "anyOf": [
+          {
+            "type": "integer"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "title": "Ref Id"
+      },
+      "operator": {
+        "type": "string",
+        "title": "Operator"
+      },
+      "remark": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "title": "Remark"
+      }
+    },
+    "type": "object",
+    "required": [
+      "id",
+      "material_id",
+      "batch_no",
+      "txn_type",
+      "qty",
+      "balance_after",
+      "ref_type",
+      "ref_id",
+      "operator",
+      "remark"
+    ],
+    "title": "TxnOut"
+  },
+  "UserOut": {
+    "properties": {
+      "id": {
+        "type": "integer",
+        "title": "Id"
+      },
+      "username": {
+        "type": "string",
+        "title": "Username"
+      },
+      "display_name": {
+        "type": "string",
+        "title": "Display Name"
+      },
+      "role": {
+        "type": "string",
+        "title": "Role"
+      },
+      "is_active": {
+        "type": "boolean",
+        "title": "Is Active"
+      },
+      "created_at": {
+        "type": "string",
+        "format": "date-time",
+        "title": "Created At"
+      }
+    },
+    "type": "object",
+    "required": [
+      "id",
+      "username",
+      "display_name",
+      "role",
+      "is_active",
+      "created_at"
+    ],
+    "title": "UserOut"
+  },
+  "ValidationError": {
+    "properties": {
+      "loc": {
+        "items": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "integer"
+            }
+          ]
+        },
+        "type": "array",
+        "title": "Location"
+      },
+      "msg": {
+        "type": "string",
+        "title": "Message"
+      },
+      "type": {
+        "type": "string",
+        "title": "Error Type"
+      },
+      "input": {
+        "title": "Input"
+      },
+      "ctx": {
+        "type": "object",
+        "title": "Context"
+      }
+    },
+    "type": "object",
+    "required": [
+      "loc",
+      "msg",
+      "type"
+    ],
+    "title": "ValidationError"
+  },
+  "WorkOrderCreate": {
+    "properties": {
+      "sales_order_id": {
+        "anyOf": [
+          {
+            "type": "integer"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "title": "Sales Order Id"
+      },
+      "product_code": {
+        "type": "string",
+        "title": "Product Code"
+      },
+      "product_name": {
+        "type": "string",
+        "title": "Product Name"
+      },
+      "plan_qty": {
+        "anyOf": [
+          {
+            "type": "number",
+            "exclusiveMinimum": 0.0
+          },
+          {
+            "type": "string"
+          }
+        ],
+        "title": "Plan Qty"
+      },
+      "line": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "title": "Line"
+      },
+      "station": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "title": "Station"
+      },
+      "route": {
+        "items": {
+          "additionalProperties": true,
+          "type": "object"
+        },
+        "type": "array",
+        "title": "Route",
+        "default": []
+      },
+      "planned_start": {
+        "anyOf": [
+          {
+            "type": "string",
+            "format": "date-time"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "title": "Planned Start"
+      },
+      "planned_end": {
+        "anyOf": [
+          {
+            "type": "string",
+            "format": "date-time"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "title": "Planned End"
+      }
+    },
+    "type": "object",
+    "required": [
+      "product_code",
+      "product_name",
+      "plan_qty"
+    ],
+    "title": "WorkOrderCreate"
+  },
+  "WorkOrderDraftOut": {
+    "properties": {
+      "wo_no": {
+        "type": "string",
+        "title": "Wo No"
+      },
+      "product_code": {
+        "type": "string",
+        "title": "Product Code"
+      },
+      "product_name": {
+        "type": "string",
+        "title": "Product Name"
+      },
+      "plan_qty": {
+        "type": "string",
+        "title": "Plan Qty"
+      },
+      "id": {
+        "anyOf": [
+          {
+            "type": "integer"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "title": "Id"
+      }
+    },
+    "type": "object",
+    "required": [
+      "wo_no",
+      "product_code",
+      "product_name",
+      "plan_qty"
+    ],
+    "title": "WorkOrderDraftOut"
+  },
+  "WorkOrderOut": {
+    "properties": {
+      "id": {
+        "type": "integer",
+        "title": "Id"
+      },
+      "wo_no": {
+        "type": "string",
+        "title": "Wo No"
+      },
+      "sales_order_id": {
+        "anyOf": [
+          {
+            "type": "integer"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "title": "Sales Order Id"
+      },
+      "product_code": {
+        "type": "string",
+        "title": "Product Code"
+      },
+      "product_name": {
+        "type": "string",
+        "title": "Product Name"
+      },
+      "plan_qty": {
+        "type": "string",
+        "title": "Plan Qty"
+      },
+      "done_qty": {
+        "type": "string",
+        "title": "Done Qty"
+      },
+      "scrap_qty": {
+        "type": "string",
+        "title": "Scrap Qty"
+      },
+      "status": {
+        "type": "string",
+        "title": "Status"
+      },
+      "line": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "title": "Line"
+      },
+      "station": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "title": "Station"
+      },
+      "route": {
+        "items": {
+          "additionalProperties": true,
+          "type": "object"
+        },
+        "type": "array",
+        "title": "Route"
+      },
+      "version": {
+        "type": "integer",
+        "title": "Version"
+      }
+    },
+    "type": "object",
+    "required": [
+      "id",
+      "wo_no",
+      "sales_order_id",
+      "product_code",
+      "product_name",
+      "plan_qty",
+      "done_qty",
+      "scrap_qty",
+      "status",
+      "line",
+      "station",
+      "route",
+      "version"
+    ],
+    "title": "WorkOrderOut"
+  },
+  "WorkOrderStatus": {
+    "type": "string",
+    "enum": [
+      "PLANNED",
+      "RELEASED",
+      "RUNNING",
+      "DONE",
+      "SCRAPPED"
+    ],
+    "title": "WorkOrderStatus"
+  },
+  "WorkOrderUpdate": {
+    "properties": {
+      "product_name": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "title": "Product Name"
+      },
+      "plan_qty": {
+        "anyOf": [
+          {
+            "type": "number",
+            "exclusiveMinimum": 0.0
+          },
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "title": "Plan Qty"
+      },
+      "line": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "title": "Line"
+      },
+      "station": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "title": "Station"
+      },
+      "route": {
+        "anyOf": [
+          {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "type": "array"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "title": "Route"
+      },
+      "planned_start": {
+        "anyOf": [
+          {
+            "type": "string",
+            "format": "date-time"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "title": "Planned Start"
+      },
+      "planned_end": {
+        "anyOf": [
+          {
+            "type": "string",
+            "format": "date-time"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "title": "Planned End"
+      }
+    },
+    "type": "object",
+    "title": "WorkOrderUpdate"
+  },
+  "app__modules__bom__schemas__ShortageOut": {
+    "properties": {
+      "product_code": {
+        "type": "string",
+        "title": "Product Code"
+      },
+      "product_name": {
+        "type": "string",
+        "title": "Product Name"
+      },
+      "order_qty": {
+        "type": "number",
+        "title": "Order Qty"
+      },
+      "ok": {
+        "type": "boolean",
+        "title": "Ok"
+      },
+      "items": {
+        "items": {
+          "$ref": "#/components/schemas/ShortageItem"
+        },
+        "type": "array",
+        "title": "Items"
+      }
+    },
+    "type": "object",
+    "required": [
+      "product_code",
+      "product_name",
+      "order_qty",
+      "ok",
+      "items"
+    ],
+    "title": "ShortageOut"
+  },
+  "app__modules__orders__schemas__ShortageOut": {
+    "properties": {
+      "material_code": {
+        "type": "string",
+        "title": "Material Code"
+      },
+      "material_name": {
+        "type": "string",
+        "title": "Material Name"
+      },
+      "required": {
+        "type": "string",
+        "title": "Required"
+      },
+      "available": {
+        "type": "string",
+        "title": "Available"
+      },
+      "shortage": {
+        "type": "string",
+        "title": "Shortage"
+      }
+    },
+    "type": "object",
+    "required": [
+      "material_code",
+      "material_name",
+      "required",
+      "available",
+      "shortage"
+    ],
+    "title": "ShortageOut"
+  }
+}

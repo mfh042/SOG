@@ -124,3 +124,15 @@ class ProductionRepository:
     async def trace_by_wo(self, wo_id: int) -> list[TraceRecord]:
         stmt = select(TraceRecord).where(TraceRecord.wo_id == wo_id)
         return list((await self.session.scalars(stmt.order_by(TraceRecord.id))).all())
+
+    async def trace_by_materials(self, batches: list[str]) -> list[TraceRecord]:
+        if not batches:
+            return []
+        stmt = select(TraceRecord).where(TraceRecord.material_batch.in_(batches))
+        return list((await self.session.scalars(stmt.order_by(TraceRecord.id))).all())
+
+    async def trace_by_products(self, batches: list[str]) -> list[TraceRecord]:
+        if not batches:
+            return []
+        stmt = select(TraceRecord).where(TraceRecord.product_batch.in_(batches))
+        return list((await self.session.scalars(stmt.order_by(TraceRecord.id))).all())

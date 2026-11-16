@@ -9,10 +9,12 @@ class OrderStatus(str, enum.Enum):
     COMPLETED = "COMPLETED"       # 已完工
     CLOSED = "CLOSED"             # 已关闭
     CANCELLED = "CANCELLED"       # 已取消
+    LOCKED = "LOCKED"             # 已锁定
 
 
 class MaterialType(str, enum.Enum):
     RAW = "RAW"          # 原料
+    SEMI = "SEMI"        # 半成品
     WIP = "WIP"          # 在制品
     FINISHED = "FINISHED"  # 成品
 

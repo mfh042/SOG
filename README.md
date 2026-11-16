@@ -24,10 +24,15 @@ dev/
 │       ├── core/                # 基础设施层（config / db / deps / concurrency / response / exceptions）
 │       ├── common/              # 枚举、分页、基类
 │       ├── modules/             # 业务模块（router → service → repository → models → schemas）
-│       │   ├── orders/          # 订单管理
-│       │   ├── material/        # 物料管控（主数据 / 库存 / 流水）
-│       │   └── production/      # 生产管理（工单 / 进度 / 质量 / 追溯）
-│       └── migrations/schema.sql # PostgreSQL 18 DDL（幂等）
+│       │   ├── auth/            # JWT 鉴权（纯标准库 HS256 + PBKDF2 密码哈希）
+│       │   ├── orders/          # 订单管理（含释放生成工单）
+│       │   ├── material/        # 物料管控（主数据 / 库存 / 流水 / FIFO）
+│       │   ├── bom/             # BOM 头/行 CRUD + 激活版本切换
+│       │   ├── production/      # 生产管理（工单 / 工序 / 报工 / 追溯 / BFS 树形）
+│       │   ├── quality/         # 不良代码独立字典（code/name/category/severity/disposal_guide）
+│       │   ├── sop/             # SOP 作业指导（产品+工序+版本，新版自动停用旧版）
+│       │   ├── dashboard/       # 看板聚合（概览 KPI / 齐套告警）
+│       │   └── migrations/schema.sql # PostgreSQL 18 DDL（幂等，12 表 1 视图）
 └── front/                       # Vue 3 前端（Vite）
     ├── package.json
     ├── vite.config.js           # /api 代理到后端
@@ -117,16 +122,43 @@ docker compose up -d --build
 | `ASYNC_CONCURRENCY` | `32` | 异步协程并发信号量上限 |
 | `CORS_ORIGINS` | `http://localhost:5173,…` | 允许的前端来源（逗号分隔） |
 | `REDIS_URL` | 空 | 预留：缓存 / 消息队列，留空不启用 |
+| `JWT_SECRET` | `change-me-in-production-please` | JWT 签名密钥，**生产必须更换**（32+ 字符随机串） |
+| `JWT_ALGORITHM` | `HS256` | 签名算法 |
+| `JWT_ACCESS_EXPIRE_MINUTES` | `120` | Access Token 有效期（分钟） |
 
-### 6. 操作人（演示）
+### 6. 鉴权（JWT，纯标准库）
 
-当前版本**无登录接口**，操作人通过请求头 `X-Operator` 透传（前端 `localStorage.operator` 默认 `system`）：
+系统已落地 **JWT Bearer 鉴权**，使用 Python 标准库 `hmac` + `hashlib` + `base64` 实现（**无 PyJWT 依赖**），密码哈希用 **PBKDF2-HMAC-SHA256（120 次迭代）**。
+
+```bash
+# 注册（首次使用）
+curl -X POST http://127.0.0.1:8000/api/auth/register \
+  -H "Content-Type: application/json" \
+  -d '{"username":"admin","display_name":"系统管理员","password":"admin123","role":"ADMIN"}'
+
+# 登录 → 获取 Token
+curl -X POST http://127.0.0.1:8000/api/auth/login \
+  -H "Content-Type: application/json" \
+  -d '{"username":"admin","password":"admin123"}'
+# → {"code":0, "data":{"access_token":"eyJhbGciOi...","token_type":"bearer","expires_in":7200}}
+
+# 带 Token 调业务接口
+curl -H "Authorization: Bearer eyJhbGciOi..." http://127.0.0.1:8000/api/production/work-orders
+```
+
+`Authorization: Bearer <token>` 缺失或无效时返回 **401 `UNAUTHORIZED`**。`X-Operator` 请求头保留为兼容旧客户端的 fallback（未启用 JWT 鉴权的写端点仍可使用）。
+
+> 生产环境**必须更换 `JWT_SECRET`**（32+ 字符随机串，可用 `openssl rand -hex 32` 生成），并在 `.env` 中覆盖默认值。
+
+### 7. 快速体验（非鉴权路径，旧客户端兼容）
+
+不启用 JWT 也可直接调接口，操作人通过 `X-Operator` 请求头透传：
 
 ```bash
 curl -H "X-Operator: operator" http://127.0.0.1:8000/api/production/work-orders
 ```
 
-前端演示可用角色（供后续 JWT 鉴权落地时复用）：
+前端演示账号（JWT 登录用）：
 
 | 账号 | 密码 | 角色 |
 |---|---|---|
@@ -135,13 +167,11 @@ curl -H "X-Operator: operator" http://127.0.0.1:8000/api/production/work-orders
 | operator | op123 | 操作工（ST-01） |
 | quality | qc123 | 质检员 |
 
-JWT 登录与按钮级权限为规划能力（产品说明书第 2.1、5.1 节）。
-
 ---
 
 ## 验证
 
-当前仓库提供 `backend/smoke_test.py`（**接口层端到端冒烟，35 项全通过**），也可用在线文档手工自测。
+当前仓库提供 `backend/smoke_test.py`（**接口层端到端冒烟，35 项全通过**），后端 `openapi.json` 已注册 **48 条路径**（auth / orders / materials / boms / production / defect-codes / sops / dashboard）。
 
 **方式一：冒烟脚本**（推荐，仅依赖标准库 `urllib`）
 
@@ -149,17 +179,19 @@ JWT 登录与按钮级权限为规划能力（产品说明书第 2.1、5.1 节�
 cd backend
 .venv\Scripts\python.exe smoke_test.py     # Windows
 # 覆盖链路：物料建档 → 入库 → 建单 → 释放 → 工单流转 → 逐工序报工（含领料）
-#           → 报废 → 末道入库 → 检验 → 质量统计 → 正反向追溯 → 追溯树 → 幂等/超产校验
+#           → 报废 → 末道入库 → 检验 → 质量统计 → 正反向追溯 → 追溯树 → BFS 追溯 → 幂等/超产校验
 ```
 
-**方式二：在线文档自测** — 打开 `http://127.0.0.1:8000/docs`，按「订单 → 物料 → 生产」顺序调用。最小验收路径：
+**方式二：在线文档自测** — 打开 `http://127.0.0.1:8000/docs`，按「鉴权 → 订单 → 物料 → 生产」顺序调用。最小验收路径：
 
-1. `POST /api/materials` 建成品 + 原料；`POST /api/materials/inbound` 入库（带批次）。
-2. `POST /api/orders` 建单 → `PUT /api/orders/{id}?version=1` 验证乐观锁 → `POST /api/orders/{id}/release` 生成工单并看缺料告警。
-3. `POST /api/materials/issue`（不传批次验证 FIFO）→ `GET /api/materials/transactions` 看流水。
-4. 工单流转 `RELEASED` → `RUNNING` → `GET /{id}/operations` 看工序 → `POST /{id}/report` 逐工序报工（首道带 `materials`）→ 末道报满自动入成品仓。
-5. `POST /api/production/inspections` 登记检验 → `GET /api/production/inspections/stats` 看统计。
-6. `GET /api/production/trace/forward/{product_batch}`、`/backward/{material_batch}`、`/tree/{product_batch}` 查追溯。
+1. **鉴权**：`POST /api/auth/register` → `POST /api/auth/login` 拿 Token → `GET /api/auth/users` 查列表。
+2. **物料**：`POST /api/materials` 建成品 + 原料 → `POST /api/materials/inbound` 入库（带批次）。
+3. **订单**：`POST /api/orders` 建单 → `PUT /api/orders/{id}?version=1` 验证乐观锁 → `POST /api/orders/{id}/release` 生成工单并看缺料告警。
+4. **领料**：`POST /api/materials/issue`（不传批次验证 FIFO）→ `GET /api/materials/transactions` 看流水。
+5. **生产**：工单流转 `RELEASED` → `RUNNING` → `GET /{id}/operations` 看工序 → `POST /{id}/report` 逐工序报工（首道带 `materials`）→ 末道报满自动入成品仓。
+6. **质量**：`POST /api/defect-codes` 建不良代码（category/severity/disposal_guide）→ `POST /api/production/inspections` 登记检验 → `GET /api/production/inspections/stats` 看统计。
+7. **SOP**：`POST /api/sops` 发布产品工序 SOP → `POST /api/sops` 再发布新版自动停用旧版 → `GET /api/sops/for-operation/{product_code}/{operation_seq}` 工位高频查询。
+8. **追溯**：`GET /api/production/trace/forward/{product_batch}`、`/backward/{material_batch}`、`/tree/{product_batch}`、`/bfs/{product_batch}?max_depth=4` 查四条路径。
 
 并发验证建议：在手 100 的批次上并发 20 次各领 10，应只有 10 次成功，其余报「可用库存不足」，且在手量不为负（行锁生效）。
 

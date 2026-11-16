@@ -114,7 +114,9 @@ class ProductionService:
             planned_end=payload.planned_end,
             status=WorkOrderStatus.PLANNED.value,
         )
-        return await self.repo.add_wo(wo)
+        await self.repo.add_wo(wo)
+        await self.session.commit()
+        return wo
 
     async def get_wo(self, wo_id: int) -> WorkOrder:
         wo = await self.repo.get_wo(wo_id)
@@ -143,6 +145,7 @@ class ProductionService:
         for k, v in data.items():
             setattr(wo, k, v)
         wo.version += 1
+        await self.session.commit()
         return wo
 
     async def transition(self, wo_id: int, target: WorkOrderStatus) -> WorkOrder:
@@ -168,6 +171,7 @@ class ProductionService:
                 )
             )
         wo.version += 1
+        await self.session.commit()
         return wo
 
     # ---------- 工序 ----------
@@ -332,6 +336,7 @@ class ProductionService:
 
         wo.route = route
         wo.version += 1
+        await self.session.commit()
         return ReportOut(
             work_order=WorkOrderOut.model_validate(wo, from_attributes=True),
             finished=finished,
@@ -486,9 +491,13 @@ class ProductionService:
         nodes = []
         for wid in wo_ids:
             events = await self.repo.trace_by_wo(wid)
+            wo = await self.repo.get_wo(wid)
             nodes.append(
                 {
                     "wo_id": wid,
+                    "wo_no": wo.wo_no if wo else None,
+                    "product_code": wo.product_code if wo else None,
+                    "status": wo.status if wo else None,
                     "events": [
                         {
                             "event_type": e.event_type,
@@ -503,3 +512,144 @@ class ProductionService:
                 }
             )
         return {"product_batch": product_batch, "work_orders": nodes}
+
+    async def trace_bfs(self, product_batch: str, max_depth: int = 4) -> dict:
+        """反向 BFS：成品批次 → 逐层展开原料来源，最多 max_depth 层。
+
+        典型路径：成品批次 → 末道 WO → 领料原料批次 → 上一层 WO（半成品）→ 更上层原料...
+        每层收集当前工单消耗的所有原料批次，递归查找这些原料还被哪些工单生产过。
+        """
+        visited_wos: set[int] = set()
+        visited_materials: set[str] = set()
+        visited_products: set[str] = {product_batch}
+        layers: list[dict] = []
+
+        current_products = [product_batch]
+        for depth in range(max_depth):
+            product_records = await self.repo.trace_by_products(current_products)
+            current_wo_ids = sorted(
+                {r.wo_id for r in product_records if r.wo_id and r.wo_id not in visited_wos}
+            )
+            if not current_wo_ids:
+                break
+            visited_wos.update(current_wo_ids)
+
+            wo_nodes = []
+            next_materials: set[str] = set()
+            for wid in current_wo_ids:
+                wo = await self.repo.get_wo(wid)
+                events = await self.repo.trace_by_wo(wid)
+                materials_used = sorted(
+                    {e.material_batch for e in events if e.material_batch and e.material_batch not in visited_materials}
+                )
+                visited_materials.update(materials_used)
+                next_materials.update(materials_used)
+
+                wo_nodes.append(
+                    {
+                        "wo_id": wid,
+                        "wo_no": wo.wo_no if wo else None,
+                        "product_code": wo.product_code if wo else None,
+                        "status": wo.status if wo else None,
+                        "events": [
+                            {
+                                "event_type": e.event_type,
+                                "material_batch": e.material_batch,
+                                "product_batch": e.product_batch,
+                                "qty": str(e.qty),
+                            }
+                            for e in events
+                        ],
+                        "material_batches": materials_used,
+                    }
+                )
+
+            layers.append({"depth": depth, "work_orders": wo_nodes})
+
+            material_records = await self.repo.trace_by_materials(list(next_materials))
+            next_products = sorted(
+                {
+                    r.product_batch
+                    for r in material_records
+                    if r.product_batch and r.product_batch not in visited_products
+                }
+            )
+            visited_products.update(next_products)
+            if not next_products:
+                break
+            current_products = next_products
+
+        return {
+            "product_batch": product_batch,
+            "max_depth": max_depth,
+            "layers": layers,
+            "total_wos": len(visited_wos),
+            "total_material_batches": len(visited_materials),
+        }
+
+    async def wip_summary(self) -> dict:
+        stmt = select(WorkOrder).where(WorkOrder.status.in_(
+            [WorkOrderStatus.RELEASED.value, WorkOrderStatus.RUNNING.value]
+        ))
+        result = await self.session.execute(stmt)
+        rows = result.scalars().all()
+
+        now = datetime.now()
+        total = len(rows)
+        total_plan = sum(float(r.plan_qty) for r in rows)
+        total_done = sum(float(r.done_qty) for r in rows)
+        avg_rate = (total_done / total_plan * 100) if total_plan else 0
+
+        station_map = {}
+        for r in rows:
+            s = r.station or "未分配"
+            item = station_map.setdefault(s, {"station": s, "wo_count": 0, "plan_qty": 0.0, "done_qty": 0.0, "aging_hours_sum": 0.0})
+            item["wo_count"] += 1
+            item["plan_qty"] += float(r.plan_qty)
+            item["done_qty"] += float(r.done_qty)
+            if r.planned_start:
+                item["aging_hours_sum"] += (now - r.planned_start).total_seconds() / 3600
+
+        stations = []
+        for s, v in station_map.items():
+            v["wip_qty"] = round(v["plan_qty"] - v["done_qty"], 3)
+            v["avg_aging_hours"] = round(v["aging_hours_sum"] / v["wo_count"], 1) if v["wo_count"] else 0
+            v["done_rate"] = round(v["done_qty"] / v["plan_qty"] * 100, 1) if v["plan_qty"] else 0
+            del v["aging_hours_sum"]
+            stations.append(v)
+        stations.sort(key=lambda x: x["wip_qty"], reverse=True)
+
+        bottleneck = stations[0] if stations else None
+
+        aging_threshold = 24.0
+        aging_rows = []
+        for r in rows:
+            if r.planned_start:
+                h = (now - r.planned_start).total_seconds() / 3600
+                if h > aging_threshold:
+                    aging_rows.append({
+                        "wo_id": r.id,
+                        "wo_no": r.wo_no,
+                        "product_code": r.product_code,
+                        "product_name": r.product_name,
+                        "station": r.station,
+                        "plan_qty": float(r.plan_qty),
+                        "done_qty": float(r.done_qty),
+                        "wip_qty": round(float(r.plan_qty) - float(r.done_qty), 3),
+                        "aging_hours": round(h, 1),
+                        "status": r.status,
+                    })
+        aging_rows.sort(key=lambda x: x["aging_hours"], reverse=True)
+
+        return {
+            "total_wip_wo": total,
+            "total_plan_qty": round(total_plan, 3),
+            "total_done_qty": round(total_done, 3),
+            "wip_qty": round(total_plan - total_done, 3),
+            "avg_done_rate": round(avg_rate, 1),
+            "bottleneck_station": bottleneck["station"] if bottleneck else None,
+            "bottleneck_wip_qty": bottleneck["wip_qty"] if bottleneck else 0,
+            "overdue_wip_count": len(aging_rows),
+            "stations": stations,
+            "aging_wips": aging_rows,
+        }

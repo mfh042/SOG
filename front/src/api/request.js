@@ -1,18 +1,27 @@
 import axios from 'axios'
 import { ElMessage } from 'element-plus'
+import { useAuthStore } from '@/stores/auth'
+import router from '@/router'
 
 const request = axios.create({
   baseURL: '/',
   timeout: 15000,
 })
 
-// 请求：携带操作人（后端认证预留）
 request.interceptors.request.use((cfg) => {
-  cfg.headers['X-Operator'] = localStorage.getItem('operator') || 'system'
+  try {
+    const auth = useAuthStore()
+    if (auth.token) {
+      cfg.headers['Authorization'] = `Bearer ${auth.token}`
+    }
+  } catch (e) {
+    /* Pinia not yet initialized */
+  }
+  const op = localStorage.getItem('operator') || 'system'
+  cfg.headers['X-Operator'] = op
   return cfg
 })
 
-// 响应：统一解包后端 Resp { code, message, data }
 request.interceptors.response.use(
   (resp) => {
     const body = resp.data
@@ -24,6 +33,16 @@ request.interceptors.response.use(
     return body
   },
   (err) => {
+    if (err.response?.status === 401) {
+      try {
+        const auth = useAuthStore()
+        auth.logout()
+      } catch (e) {}
+      if (!location.hash.includes('/login')) {
+        ElMessage.warning('登录已过期，请重新登录')
+        router.push('/login')
+      }
+    }
     const msg = err.response?.data?.message || err.message || '网络错误'
     ElMessage.error(msg)
     return Promise.reject(err)

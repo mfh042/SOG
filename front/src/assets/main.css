@@ -1,13 +1,92 @@
 :root {
-  --brand: #1d6ce0;
+  --brand: #2b7cff;
+  --brand-dark: #1a5cd8;
+  --brand-light: #6ca6ff;
+  --brand-bg: #eaf2ff;
+  --brand-50: #f4f8ff;
   --bg: #f4f7fc;
+  --bg-white: #ffffff;
+  --border: #dfe7f2;
+  --text-primary: #1b2a40;
+  --text-secondary: #5a6d86;
+  --text-muted: #9aa7ba;
+  --success: #27c281;
+  --warning: #f0a020;
+  --danger: #ec4c5a;
+  --radius-sm: 6px;
+  --radius-md: 10px;
+  --shadow-sm: 0 1px 3px rgba(27, 42, 64, 0.06);
+  --shadow-md: 0 4px 16px rgba(27, 42, 64, 0.08);
 }
+
 * { box-sizing: border-box; }
 html, body, #app { height: 100%; margin: 0; }
 body {
-  font-family: 'Segoe UI', 'Microsoft YaHei', sans-serif;
+  font-family: 'Segoe UI', 'Microsoft YaHei', 'PingFang SC', system-ui, sans-serif;
   background: var(--bg);
-  color: #1f2d3d;
+  color: var(--text-primary);
+  font-size: 14px;
+  -webkit-font-smoothing: antialiased;
 }
+
 .page-title { font-size: 18px; font-weight: 600; margin: 0 0 16px; }
 .toolbar { display: flex; gap: 12px; align-items: center; margin-bottom: 16px; flex-wrap: wrap; }
+
+.el-table {
+  border-radius: var(--radius-md);
+  overflow: hidden;
+  --el-table-border-color: var(--border);
+  --el-table-header-bg-color: var(--brand-50);
+  --el-table-row-hover-bg-color: var(--brand-bg);
+  --el-table-tr-bg-color: var(--bg-white);
+}
+.el-table :deep(th.el-table__cell) {
+  background: var(--brand-50);
+  color: var(--text-primary);
+  font-weight: 600;
+  font-size: 13px;
+}
+
+.el-card {
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border);
+  box-shadow: var(--shadow-sm);
+}
+
+.el-button--primary {
+  --el-button-bg-color: var(--brand);
+  --el-button-border-color: var(--brand);
+  --el-button-hover-bg-color: var(--brand-light);
+  --el-button-hover-border-color: var(--brand-light);
+  --el-button-active-bg-color: var(--brand-dark);
+  --el-button-active-border-color: var(--brand-dark);
+}
+
+.el-tag { border-radius: 4px; }
+.el-dialog { border-radius: var(--radius-md); overflow: hidden; }
+.el-dialog__header { background: var(--brand-50); padding: 16px 20px; border-bottom: 1px solid var(--border); }
+.el-dialog__title { font-weight: 600; color: var(--text-primary); }
+.el-dialog__body { padding: 20px; }
+
+.el-input__wrapper,
+.el-select__wrapper,
+.el-textarea__inner {
+  border-radius: var(--radius-sm);
+}
+.el-input__wrapper.is-focus,
+.el-select__wrapper.is-focused {
+  box-shadow: 0 0 0 1px var(--brand) inset !important;
+}
+
+.el-alert { border-radius: var(--radius-md); }
+
+.stat-card {
+  background: linear-gradient(135deg, #eaf2ff 0%, #f4f8ff 100%);
+  border: 1px solid #d6e3ff;
+  border-radius: var(--radius-md);
+  padding: 20px 24px;
+  min-width: 180px;
+}
+.stat-card .label { color: var(--text-secondary); font-size: 13px; margin-bottom: 8px; }
+.stat-card .value { font-size: 28px; font-weight: 700; color: var(--brand); letter-spacing: -0.5px; }
+.stat-card .sub { font-size: 12px; color: var(--text-muted); margin-top: 4px; }

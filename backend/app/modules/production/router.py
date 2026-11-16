@@ -232,3 +232,17 @@ async def backward_trace(material_batch: str, session: AsyncSession = Depends(ge
 @router.get("/trace/tree/{product_batch}", summary="追溯树：成品批次 → 工单 → 全部事件")
 async def trace_tree(product_batch: str, session: AsyncSession = Depends(get_db)):
     return Resp.ok(await _svc(session, "system").trace_tree(product_batch))
+
+
+@router.get("/trace/bfs/{product_batch}", summary="反向 BFS 追溯：成品 → 在制品 → 原料逐层展开")
+async def trace_bfs(
+    product_batch: str,
+    max_depth: int = Query(4, ge=1, le=10, description="BFS 最大层数"),
+    session: AsyncSession = Depends(get_db),
+):
+    return Resp.ok(await _svc(session, "system").trace_bfs(product_batch, max_depth))
+
+
+@router.get("/wip/summary", summary="WIP 在制品汇总看板：KPI + 工位分布 + 龄分析")
+async def wip_summary(session: AsyncSession = Depends(get_db)):
+    return Resp.ok(await _svc(session, "system").wip_summary())

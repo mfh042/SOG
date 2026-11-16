@@ -44,7 +44,7 @@ CREATE TABLE IF NOT EXISTS material (
     id           BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
     code         VARCHAR(64)  NOT NULL UNIQUE,
     name         VARCHAR(128) NOT NULL,
-    type         VARCHAR(16)  NOT NULL CHECK (type IN ('RAW','WIP','FINISHED')),
+    type         VARCHAR(16)  NOT NULL CHECK (type IN ('RAW','SEMI','WIP','FINISHED')),
     spec         VARCHAR(256),
     unit         VARCHAR(16)  NOT NULL DEFAULT 'PCS',
     safety_stock NUMERIC(18,3) NOT NULL DEFAULT 0 CHECK (safety_stock >= 0),
@@ -55,6 +55,17 @@ CREATE TABLE IF NOT EXISTS material (
 );
 CREATE INDEX IF NOT EXISTS idx_material_type ON material(type);
 CREATE INDEX IF NOT EXISTS idx_material_name  ON material(name);
+
+-- 幂等升级：已建表但 type 不含 SEMI 时追加约束
+DO $$
+BEGIN
+  BEGIN
+    ALTER TABLE material DROP CONSTRAINT IF EXISTS material_type_check;
+    ALTER TABLE material ADD CONSTRAINT material_type_check
+      CHECK (type IN ('RAW','SEMI','WIP','FINISHED'));
+  EXCEPTION WHEN OTHERS THEN NULL;
+  END;
+END $$;
 
 -- ---------- 物料管控：库存台账 ----------
 CREATE TABLE IF NOT EXISTS inventory (
@@ -183,3 +194,78 @@ SELECT m.code, m.name, m.type, i.batch_no, i.location,
        m.safety_stock
 FROM inventory i
 JOIN material m ON m.id = i.material_id;
+
+-- ---------- BOM 物料清单 ----------
+CREATE TABLE IF NOT EXISTS bom (
+    id                  BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    product_material_id BIGINT       NOT NULL REFERENCES material(id) ON DELETE CASCADE,
+    version             VARCHAR(32)  NOT NULL DEFAULT 'V1',
+    is_active           BOOLEAN      NOT NULL DEFAULT TRUE,
+    status              VARCHAR(16)  NOT NULL DEFAULT 'ACTIVE',
+    remark              TEXT,
+    created_at          TIMESTAMPTZ  NOT NULL DEFAULT now(),
+    updated_at          TIMESTAMPTZ  NOT NULL DEFAULT now()
+);
+CREATE UNIQUE INDEX IF NOT EXISTS uq_bom_active
+    ON bom (product_material_id) WHERE is_active;
+CREATE INDEX IF NOT EXISTS idx_bom_product ON bom(product_material_id);
+
+CREATE TABLE IF NOT EXISTS bom_item (
+    id                    BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    bom_id                BIGINT       NOT NULL REFERENCES bom(id) ON DELETE CASCADE,
+    component_material_id BIGINT       NOT NULL REFERENCES material(id) ON DELETE RESTRICT,
+    qty                   NUMERIC(18,4) NOT NULL CHECK (qty > 0),
+    loss_rate             NUMERIC(6,4)  NOT NULL DEFAULT 0 CHECK (loss_rate >= 0),
+    seq                   INT          NOT NULL DEFAULT 1,
+    created_at            TIMESTAMPTZ  NOT NULL DEFAULT now()
+);
+CREATE UNIQUE INDEX IF NOT EXISTS uq_bom_item
+    ON bom_item (bom_id, component_material_id);
+CREATE INDEX IF NOT EXISTS idx_bom_item_bom ON bom_item(bom_id);
+
+-- ---------- 质量：不良代码字典 ----------
+CREATE TABLE IF NOT EXISTS defect_code (
+    id            BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    code          VARCHAR(32)  NOT NULL UNIQUE,
+    name          VARCHAR(128) NOT NULL,
+    category      VARCHAR(32)  NOT NULL DEFAULT 'OTHER',
+    severity      VARCHAR(16)  NOT NULL DEFAULT 'MINOR'
+                  CHECK (severity IN ('CRITICAL','MAJOR','MINOR','SUGGESTION')),
+    disposal_guide TEXT,
+    is_active     BOOLEAN      NOT NULL DEFAULT TRUE,
+    created_at    TIMESTAMPTZ  NOT NULL DEFAULT now(),
+    updated_at    TIMESTAMPTZ  NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS idx_defect_category ON defect_code(category);
+CREATE INDEX IF NOT EXISTS idx_defect_severity ON defect_code(severity);
+
+-- ---------- SOP 作业指导 ----------
+CREATE TABLE IF NOT EXISTS sop (
+    id            BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    product_code  VARCHAR(64)  NOT NULL,
+    operation_seq INT          NOT NULL,
+    operation_name VARCHAR(64) NOT NULL,
+    title         VARCHAR(256) NOT NULL,
+    content       TEXT,
+    content_url   VARCHAR(512),
+    version       VARCHAR(16)  NOT NULL DEFAULT 'V1',
+    is_active     BOOLEAN      NOT NULL DEFAULT TRUE,
+    created_at    TIMESTAMPTZ  NOT NULL DEFAULT now(),
+    updated_at    TIMESTAMPTZ  NOT NULL DEFAULT now()
+);
+CREATE UNIQUE INDEX IF NOT EXISTS uq_sop_product_op
+    ON sop (product_code, operation_seq) WHERE is_active;
+CREATE INDEX IF NOT EXISTS idx_sop_product ON sop(product_code);
+
+-- ---------- 用户（JWT 鉴权） ----------
+CREATE TABLE IF NOT EXISTS app_user (
+    id            BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    username      VARCHAR(64)  NOT NULL UNIQUE,
+    display_name  VARCHAR(128) NOT NULL,
+    password_hash VARCHAR(256) NOT NULL,
+    role          VARCHAR(32)  NOT NULL DEFAULT 'OPERATOR',
+    is_active     BOOLEAN      NOT NULL DEFAULT TRUE,
+    created_at    TIMESTAMPTZ  NOT NULL DEFAULT now(),
+    updated_at    TIMESTAMPTZ  NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS idx_user_role ON app_user(role);

@@ -1,4 +1,4 @@
-"""订单业务规则：创建、状态流转（状态机）、乐观锁校验、释放生成工单。"""
+"""订单业务规则：创建、状态流转（状态机）、乐观锁校验、释放生成工单、BOM 驱动齐套检查。"""
 import secrets
 from datetime import datetime
 from decimal import Decimal
@@ -10,6 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.common.enums import OrderStatus, WorkOrderStatus
 from app.core.deps import Pagination
 from app.core.exceptions import ConflictException, NotFoundException
+from app.modules.bom.repository import BomRepository
 from app.modules.material.models import Inventory, Material
 from app.modules.material.repository import MaterialRepository
 from app.modules.orders.models import OrderItem, SalesOrder
@@ -26,12 +27,13 @@ from app.modules.production.models import WorkOrder
 
 # 合法状态流转表
 TRANSITIONS: dict[OrderStatus, set[OrderStatus]] = {
-    OrderStatus.DRAFT: {OrderStatus.RELEASED, OrderStatus.CANCELLED},
-    OrderStatus.RELEASED: {OrderStatus.IN_PROGRESS, OrderStatus.CANCELLED},
-    OrderStatus.IN_PROGRESS: {OrderStatus.COMPLETED, OrderStatus.CANCELLED},
-    OrderStatus.COMPLETED: {OrderStatus.CLOSED},
+    OrderStatus.DRAFT: {OrderStatus.RELEASED, OrderStatus.CANCELLED, OrderStatus.LOCKED},
+    OrderStatus.RELEASED: {OrderStatus.IN_PROGRESS, OrderStatus.CANCELLED, OrderStatus.LOCKED},
+    OrderStatus.IN_PROGRESS: {OrderStatus.COMPLETED, OrderStatus.CANCELLED, OrderStatus.LOCKED},
+    OrderStatus.COMPLETED: {OrderStatus.CLOSED, OrderStatus.LOCKED},
     OrderStatus.CLOSED: set(),
     OrderStatus.CANCELLED: set(),
+    OrderStatus.LOCKED: {OrderStatus.DRAFT, OrderStatus.RELEASED},
 }
 
 # 允许编辑订单行的状态
@@ -64,6 +66,7 @@ class OrderService:
         self.session = session
         self.repo = OrderRepository(session)
         self.material_repo = MaterialRepository(session)
+        self.bom_repo = BomRepository(session)
 
     async def create(self, payload: OrderCreate) -> SalesOrder:
         order = SalesOrder(
@@ -76,7 +79,9 @@ class OrderService:
             status=OrderStatus.DRAFT.value,
         )
         order.items = [_item_from(i) for i in payload.items]
-        return await self.repo.add(order)
+        await self.repo.add(order)
+        await self.session.commit()
+        return order
 
     async def get(self, order_id: int) -> SalesOrder:
         order = await self.repo.get(order_id)
@@ -106,6 +111,7 @@ class OrderService:
         if payload.items is not None:
             order.items = [_item_from(i) for i in payload.items]
         order.version += 1
+        await self.session.commit()
         return order
 
     async def transition(self, order_id: int, target: OrderStatus) -> SalesOrder:
@@ -115,6 +121,7 @@ class OrderService:
             raise ConflictException(f"状态 {current.value} 不能流转到 {target.value}")
         order.status = target.value
         order.version += 1
+        await self.session.commit()
         return order
 
     async def release(self, order_id: int) -> ReleaseOut:
@@ -162,6 +169,7 @@ class OrderService:
         await self.session.flush()
         order.status = OrderStatus.RELEASED.value
         order.version += 1
+        await self.session.commit()
         return ReleaseOut(
             order_no=order.order_no,
             status=order.status,
@@ -189,35 +197,106 @@ class OrderService:
         return list((await self.session.scalars(stmt)).all())
 
     async def _check_shortage(self, order: SalesOrder) -> List[ShortageOut]:
-        """按订单行匹配同名物料，汇总可用量并给出缺料清单。
+        """BOM 驱动的齐套检查：订单行成品 → 激活 BOM → 组件需求展开 → 对比库存。
 
-        未建物料主数据的订单行不参与齐套判断（视为外部自制件）。
+        三条路径：
+        1. 成品物料存在且有激活 BOM → 展开所有组件需求（含损耗率），逐项对比可用量
+        2. 成品物料存在但无 BOM → 标记 KIT_UNKNOWN（提示补建 BOM），仍按成品直查库存兜底
+        3. 成品物料不存在（外部自制件）→ 跳过，不参与齐套判断
+
+        返回的 warnings 可能同时包含组件级缺口和 KIT_UNKNOWN 提示。
         """
-        required: dict[str, dict] = {}
-        for item in order.items:
-            key = item.material_code
-            entry = required.setdefault(
-                key, {"name": item.material_name, "qty": Decimal(0)}
-            )
-            entry["qty"] += item.qty
-
         warnings: List[ShortageOut] = []
-        for code, info in required.items():
-            material = await self.material_repo.get_by_code(code)
-            if not material:
+        component_summary: dict[int, dict] = {}
+
+        for item in order.items:
+            product = await self.material_repo.get_by_code(item.material_code)
+            if product is None:
                 continue
-            available = await self.material_repo.batch_available(material.id)
-            if available < info["qty"]:
-                warnings.append(
-                    ShortageOut(
-                        material_code=code,
-                        material_name=info["name"],
-                        required=info["qty"],
-                        available=available,
-                        shortage=info["qty"] - available,
+
+            bom = await self.bom_repo.get_by_product(product.id)
+            if bom is None:
+                available = await self.material_repo.batch_available(product.id)
+                if available < item.qty:
+                    warnings.append(
+                        ShortageOut(
+                            material_code=item.material_code,
+                            material_name=f"{item.material_name}（未建 BOM，按成品直查）",
+                            required=item.qty,
+                            available=available,
+                            shortage=item.qty - available,
+                        )
                     )
+                else:
+                    warnings.append(
+                        ShortageOut(
+                            material_code=item.material_code,
+                            material_name=f"{item.material_name}（KIT_UNKNOWN：未建 BOM）",
+                            required=item.qty,
+                            available=available,
+                            shortage=Decimal(0),
+                        )
+                    )
+                continue
+
+            for bom_item in bom.items:
+                need = Decimal(str(bom_item.qty)) * item.qty * (
+                    Decimal("1") + Decimal(str(bom_item.loss_rate))
                 )
+                entry = component_summary.setdefault(
+                    bom_item.component_material_id,
+                    {"need": Decimal(0), "name": "", "code": ""},
+                )
+                entry["need"] += need
+                if not entry["code"]:
+                    comp = await self.material_repo.get_material(bom_item.component_material_id)
+                    if comp:
+                        entry["code"] = comp.code
+                        entry["name"] = comp.name
+
+        if component_summary:
+            comp_ids = list(component_summary.keys())
+            avail_map = await self.bom_repo.inventory_available_map(comp_ids)
+            for comp_id, info in component_summary.items():
+                available = Decimal(str(avail_map.get(comp_id, 0.0)))
+                need = info["need"].quantize(Decimal("0.0001"))
+                shortage = (need - available).quantize(Decimal("0.0001"))
+                if shortage > 0:
+                    warnings.append(
+                        ShortageOut(
+                            material_code=info["code"] or f"ID:{comp_id}",
+                            material_name=info["name"],
+                            required=need,
+                            available=available,
+                            shortage=shortage,
+                        )
+                    )
+
         return warnings
+
+    async def kit_check(self, order_id: int) -> dict:
+        """订单级齐套检查（独立接口）：返回 kit_status + 缺料清单。"""
+        order = await self.get(order_id)
+        warnings = await self._check_shortage(order)
+
+        has_shortage = any(w.shortage > 0 for w in warnings)
+        has_unknown = any("KIT_UNKNOWN" in w.material_name for w in warnings)
+
+        if has_shortage:
+            status = "KIT_SHORT"
+        elif has_unknown:
+            status = "KIT_UNKNOWN"
+        else:
+            status = "KIT_READY"
+
+        return {
+            "order_id": order.id,
+            "order_no": order.order_no,
+            "status": status,
+            "shortage_count": sum(1 for w in warnings if w.shortage > 0),
+            "unknown_count": sum(1 for w in warnings if "KIT_UNKNOWN" in w.material_name),
+            "details": warnings,
+        }
 
     async def product_availability(self, material_code: str) -> Decimal:
         """仅供内部/看板使用：某物料可用量合计。"""
@@ -231,3 +310,116 @@ class OrderService:
     async def material_map(self) -> dict[str, Material]:
         stmt = select(Material)
         return {m.code: m for m in (await self.session.scalars(stmt)).all()}
+
+    async def split(self, order_id: int, split_qty: Decimal) -> SalesOrder:
+        """订单拆分：从前 N 台拆出为新订单，原订单扣减数量。"""
+        order = await self.get(order_id)
+        if order.status not in (OrderStatus.DRAFT.value, OrderStatus.RELEASED.value):
+            raise ConflictException("仅草稿或已下达订单可拆分")
+        total = sum((i.qty for i in order.items), Decimal(0))
+        if split_qty <= 0 or split_qty >= total:
+            raise ConflictException(f"拆分数量必须在 (0, {total}) 之间")
+
+        new_order = SalesOrder(
+            order_no=_gen_order_no(),
+            customer_name=order.customer_name,
+            product_model=order.product_model,
+            priority=order.priority,
+            planned_date=order.planned_date,
+            note=f"拆分自 {order.order_no}",
+            status=order.status,
+        )
+        remaining = split_qty
+        for item in sorted(order.items, key=lambda i: i.line_no):
+            take = min(item.qty, remaining)
+            if take > 0:
+                new_order.items.append(
+                    OrderItem(
+                        line_no=item.line_no,
+                        material_code=item.material_code,
+                        material_name=item.material_name,
+                        spec=item.spec,
+                        qty=take,
+                        unit=item.unit,
+                    )
+                )
+                item.qty -= take
+                remaining -= take
+            if remaining <= 0:
+                break
+
+        new_order.version = 1
+        order.version += 1
+        self.session.add(new_order)
+        await self.session.commit()
+        return new_order
+
+    async def reschedule(self, order_id: int, planned_date: str) -> SalesOrder:
+        from datetime import date
+        order = await self.get(order_id)
+        if order.status in (OrderStatus.CANCELLED.value, OrderStatus.CLOSED.value, OrderStatus.LOCKED.value):
+            raise ConflictException("当前状态不可排产")
+        order.planned_date = date.fromisoformat(planned_date)
+        order.version += 1
+        await self.session.commit()
+        return order
+
+    async def adjust_qty(self, order_id: int, qty: float) -> SalesOrder:
+        order = await self.get(order_id)
+        if order.status not in EDITABLE_STATUS:
+            raise ConflictException("仅草稿或已下达订单可调整数量")
+        decimal_qty = Decimal(str(qty))
+        total = sum((i.qty for i in order.items), Decimal(0))
+        if total <= 0:
+            raise ConflictException("订单行数量异常")
+        ratio = decimal_qty / total
+        for item in order.items:
+            item.qty = (item.qty * ratio).quantize(Decimal("0.001"))
+        order.version += 1
+        await self.session.commit()
+        return order
+
+    async def batch_release(self, order_ids: List[int]) -> dict:
+        ok, fail = 0, 0
+        for oid in order_ids:
+            try:
+                await self.release(oid)
+                ok += 1
+            except Exception:
+                fail += 1
+        return {"ok": ok, "fail": fail}
+
+    async def import_orders(self, rows: List[dict]) -> dict:
+        created, failed = 0, 0
+        errors: List[dict] = []
+        for idx, raw in enumerate(rows, start=2):
+            try:
+                order = SalesOrder(
+                    order_no=_gen_order_no(),
+                    customer_name=(raw.get("客户") or raw.get("customer") or "导入").strip(),
+                    product_model=(raw.get("产品型号") or raw.get("product_model") or "").strip(),
+                    priority=int(raw.get("优先级") or raw.get("priority") or 3),
+                    note=f"CSV 导入 行{idx}",
+                    status=OrderStatus.DRAFT.value,
+                )
+                if raw.get("计划日期") or raw.get("planned_date"):
+                    from datetime import date
+                    order.planned_date = date.fromisoformat(
+                        (raw.get("计划日期") or raw.get("planned_date")).strip()
+                    )
+                order.items = [
+                    OrderItem(
+                        line_no=1,
+                        material_code=order.product_model,
+                        material_name=order.product_model,
+                        qty=Decimal(str(raw.get("数量") or raw.get("qty") or 1)),
+                        unit=(raw.get("单位") or raw.get("unit") or "PCS").strip() or "PCS",
+                    )
+                ]
+                self.session.add(order)
+                created += 1
+            except Exception as e:
+                failed += 1
+                errors.append({"row": idx, "error": str(e)})
+        await self.session.commit()
+        return {"created": created, "failed": failed, "errors": errors}

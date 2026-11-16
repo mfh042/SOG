@@ -25,6 +25,20 @@ class ConflictException(BizException):
         super().__init__(message, code=409, status=409)
 
 
+class UnauthorizedException(BizException):
+    """鉴权失败：Token 无效 / 过期 / 无权限。"""
+
+    def __init__(self, message: str = "未登录或身份已失效"):
+        super().__init__(message, code=401, status=401)
+
+
+class ForbiddenException(BizException):
+    """权限不足。"""
+
+    def __init__(self, message: str = "无权执行该操作"):
+        super().__init__(message, code=403, status=403)
+
+
 def register_exception_handlers(app: FastAPI) -> None:
     @app.exception_handler(BizException)
     async def _biz(_: Request, exc: BizException) -> JSONResponse:

@@ -21,3 +21,6 @@ export const backwardTrace = (material_batch) =>
   request.get(`/api/production/trace/backward/${encodeURIComponent(material_batch)}`)
 export const traceTree = (product_batch) =>
   request.get(`/api/production/trace/tree/${encodeURIComponent(product_batch)}`)
+export const traceBfs = (product_batch, maxDepth = 4) =>
+  request.get(`/api/production/trace/bfs/${encodeURIComponent(product_batch)}`, { params: { max_depth: maxDepth } })
+export const wipSummary = () => request.get('/api/production/wip/summary')

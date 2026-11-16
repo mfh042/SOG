@@ -26,7 +26,9 @@ class MaterialService:
         if await self.repo.get_by_code(payload.code):
             raise ConflictException("物料编码已存在")
         m = Material(**payload.model_dump())
-        return await self.repo.add_material(m)
+        await self.repo.add_material(m)
+        await self.session.commit()
+        return m
 
     async def get_material(self, material_id: int) -> Material:
         m = await self.repo.get_material(material_id)
@@ -43,6 +45,7 @@ class MaterialService:
         inv = await self._locked(payload.material_id, payload.batch_no, payload.location, create=True)
         inv.qty_on_hand += payload.qty
         await self._txn("IN", payload.qty, inv, remark=payload.remark)
+        await self.session.commit()
         return inv
 
     async def reserve(self, req: StockOpReq) -> Inventory:
@@ -52,6 +55,7 @@ class MaterialService:
             raise ConflictException(f"可用库存不足：需 {req.qty}，仅余 {inv.available if inv else 0}")
         inv.qty_reserved += req.qty
         await self._txn("RESERVE", req.qty, inv, req)
+        await self.session.commit()
         return inv
 
     async def release(self, req: StockOpReq) -> Inventory:
@@ -62,6 +66,7 @@ class MaterialService:
             raise ConflictException("预留数量不足，无法释放")
         inv.qty_reserved -= req.qty
         await self._txn("RELEASE", req.qty, inv, req)
+        await self.session.commit()
         return inv
 
     async def issue(self, req: StockOpReq) -> Inventory:
@@ -70,14 +75,18 @@ class MaterialService:
         未指定批次时按批次创建时间先进先出（FIFO）自动选批，跨批次拆扣。
         """
         await self.get_material(req.material_id)
-        return await self._outbound(req, "OUT", "可用库存不足")
+        result = await self._outbound(req, "OUT", "可用库存不足")
+        await self.session.commit()
+        return result
 
     async def consume(
         self, req: StockOpReq, consumed: list[dict] | None = None
     ) -> Inventory:
         """领料出库并收集实际扣减明细，供追溯反查原料批次使用。"""
         await self.get_material(req.material_id)
-        return await self._outbound(req, "OUT", "可用库存不足", consumed=consumed)
+        result = await self._outbound(req, "OUT", "可用库存不足", consumed=consumed)
+        await self.session.commit()
+        return result
 
     async def scrap(self, req: StockOpReq) -> Inventory:
         """报废出库：从在手数量中直接扣减，不影响预留在手差额。"""
@@ -89,6 +98,7 @@ class MaterialService:
             raise ConflictException(f"在手库存不足：需 {req.qty}，仅余 {inv.qty_on_hand}")
         inv.qty_on_hand -= req.qty
         await self._txn("SCRAP", req.qty, inv, req)
+        await self.session.commit()
         return inv
 
     async def get_inventory(self, inventory_id: int) -> Inventory:

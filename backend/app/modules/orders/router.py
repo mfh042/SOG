@@ -1,5 +1,7 @@
 """订单 REST 路由。"""
-from fastapi import APIRouter, Depends, Query
+import csv
+import io
+from fastapi import APIRouter, Depends, Query, UploadFile, File
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.common.enums import OrderStatus
@@ -8,6 +10,7 @@ from app.core.response import PageData, Resp
 from app.modules.orders.schemas import (
     OrderCreate,
     OrderOut,
+    OrderSplitIn,
     OrderUpdate,
     ReleaseOut,
 )
@@ -17,7 +20,9 @@ router = APIRouter(prefix="/api/orders", tags=["订单管理"])
 
 
 def _to_out(o) -> OrderOut:
-    return OrderOut.model_validate(o, from_attributes=True)
+    data = OrderOut.model_validate(o, from_attributes=True)
+    data.qty = sum((i.qty for i in o.items), type(o.items[0].qty if o.items else __import__("decimal").Decimal)())
+    return data
 
 
 @router.post("", response_model=Resp[OrderOut], summary="创建订单")
@@ -96,3 +101,63 @@ async def release_order(order_id: int, session: AsyncSession = Depends(get_db)):
     if result.warnings:
         message = f"释放成功，但有 {len(result.warnings)} 项缺料"
     return Resp.ok(result, message=message)
+
+
+@router.get("/{order_id}/kit-check", summary="订单齐套检查（BOM 驱动）")
+async def order_kit_check(order_id: int, session: AsyncSession = Depends(get_db)):
+    result = await OrderService(session).kit_check(order_id)
+    return Resp.ok(result)
+
+
+@router.post("/{order_id}/split", response_model=Resp[OrderOut], summary="订单拆分：拆出前 N 台为新订单")
+async def split_order(
+    order_id: int,
+    payload: OrderSplitIn,
+    session: AsyncSession = Depends(get_db),
+):
+    new_order = await OrderService(session).split(order_id, payload.split_qty)
+    return Resp.ok(_to_out(new_order), message=f"已拆出新订单 {new_order.order_no}")
+
+
+@router.post("/{order_id}/reschedule", response_model=Resp[OrderOut], summary="订单排产：更新计划日期")
+async def reschedule_order(
+    order_id: int,
+    planned_date: str = Query(..., description="YYYY-MM-DD"),
+    session: AsyncSession = Depends(get_db),
+):
+    order = await OrderService(session).reschedule(order_id, planned_date)
+    return Resp.ok(_to_out(order), message="计划日期已更新")
+
+
+@router.post("/{order_id}/adjust-qty", response_model=Resp[OrderOut], summary="订单调整：更新订单行数量")
+async def adjust_qty_order(
+    order_id: int,
+    qty: float = Query(..., gt=0),
+    session: AsyncSession = Depends(get_db),
+):
+    order = await OrderService(session).adjust_qty(order_id, qty)
+    return Resp.ok(_to_out(order), message="数量已更新")
+
+
+@router.post("/batch-release", summary="批量下达：将多个草稿订单释放生成工单")
+async def batch_release(
+    order_ids: list[int],
+    session: AsyncSession = Depends(get_db),
+):
+    result = await OrderService(session).batch_release(order_ids)
+    return Resp.ok(result)
+
+
+@router.post("/import", summary="CSV 批量导入生产工单")
+async def import_orders(
+    file: UploadFile = File(...),
+    session: AsyncSession = Depends(get_db),
+):
+    raw = await file.read()
+    try:
+        text = raw.decode("utf-8-sig")
+    except UnicodeDecodeError:
+        text = raw.decode("gbk")
+    rows = list(csv.DictReader(io.StringIO(text)))
+    result = await OrderService(session).import_orders(rows)
+    return Resp.ok(result, message=f"导入完成：{result['created']} 成功，{result['failed']} 失败")
