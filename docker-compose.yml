@@ -1,0 +1,33 @@
+version: "3.9"
+
+# PostgreSQL 18 单机实例；首次启动自动执行 schema.sql 初始化。
+services:
+  postgres:
+    image: postgres:18-alpine
+    container_name: sog-postgres18
+    environment:
+      POSTGRES_DB: sog
+      POSTGRES_USER: sog
+      POSTGRES_PASSWORD: sog_pass
+      TZ: Asia/Shanghai
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      - ./backend/app/migrations/schema.sql:/docker-entrypoint-initdb.d/01_schema.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U sog -d sog"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    # PG18 并发适配：连接数按实例规格调整
+    command:
+      - postgres
+      - -c
+      - max_connections=200
+      - -c
+      - shared_buffers=256MB
+
+volumes:
+  pgdata:
+#（注：内容由AI生成）

@@ -1,0 +1,13 @@
+:root {
+  --brand: #1d6ce0;
+  --bg: #f4f7fc;
+}
+* { box-sizing: border-box; }
+html, body, #app { height: 100%; margin: 0; }
+body {
+  font-family: 'Segoe UI', 'Microsoft YaHei', sans-serif;
+  background: var(--bg);
+  color: #1f2d3d;
+}
+.page-title { font-size: 18px; font-weight: 600; margin: 0 0 16px; }
+.toolbar { display: flex; gap: 12px; align-items: center; margin-bottom: 16px; flex-wrap: wrap; }
