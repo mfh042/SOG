@@ -2,9 +2,9 @@
 
 | 项目 | 内容 |
 |---|---|
-| 文档版本 | V2.2（SOP 媒体上传 + 图片标注 + 登录/注册分离） |
+| 文档版本 | V2.3（RBAC 权限持久化 + 物料/BOM CSV 导入 + 检验类型字典 + 审计日志 + 设备骨架） |
 | 编制日期 | 2026-11-17 |
-| 对应系统版本 | sog-system 0.3.0（FastAPI + Vue 3 + PostgreSQL 18 · JWT + SOP 媒体/标注 + BFS 追溯） |
+| 对应系统版本 | sog-system 0.4.0（FastAPI + Vue 3 + PostgreSQL 18 · JWT + RBAC + CSV 导入 + 检验类型 + 审计 + 设备） |
 | 文档类型 | 产品说明书 / 技术方案（对外可交付） |
 | 状态标记 | ✅ 已实现并验证　◐ 部分实现　○ 规划中（本期未实现） |
 | 合并来源 | `architecture.md`、`SOG 离散装配生产作业支援系统技术方案.md`、`SOG系统产品说明书.md`（内容已全部并入本文） |
@@ -102,7 +102,14 @@ MOM 制造运营管理
 ### 2.1 权限模型
 
 - **当前实现 ✅**：JWT Bearer 鉴权已落地。注册/登录接口独立，密码使用 **PBKDF2-HMAC-SHA256（120 次迭代）** 纯标准库哈希（`modules/auth/crypto.py`，无第三方依赖）；Token 为 **HS256**，默认有效期 120 分钟；`core/deps.get_current_user` 依赖从 `Authorization: Bearer <token>` 解析用户并查库校验 `is_active`。`X-Operator` 头保留为可选 fallback（未启用 JWT 的旧客户端可继续使用）。
-- **规划 ○**：按钮级权限矩阵、工位与操作工绑定（`stations` + `users.station_code`）、SSO/OIDC 接入。
+- **RBAC 角色权限矩阵 ✅ 已实现并可前端编辑**：
+  - 5 级角色 **ADMIN / MANAGER / PLANNER / QUALITY / OPERATOR**，ADMIN 永远拥有 `*` 通配全权限
+  - `role_permission` 表持久化（唯一约束 `(role, permission)`），启动时从硬编码种子初始化（仅当表为空时）
+  - `require_perm(perm)` 依赖异步查 DB + 内存缓存，写接口自动 `invalidate_role()` 清缓存，权限变更**立即生效**
+  - `GET /api/auth/roles` 取当前角色权限列表；`GET /api/auth/permissions/catalog` 取可选权限清单（35 项，按模块分组）；`PUT /api/auth/roles/{role}/permissions` 全量替换
+  - 前端 RolesView.vue 提供**可视化权限矩阵**：行=权限项、列=角色、勾选即改、单角色/批量保存、变更未保存时列头标 `*`
+  - 权限按模块分 13 组：material / bom / orders / production / quality / defect / sop / inventory / wip / device / trace / dashboard / admin
+- **规划 ○**：工位与操作工绑定（`stations` + `users.station_code`）、SSO/OIDC 接入。
 
 | 账号 | 密码 | 角色 |
 |---|---|---|
@@ -119,26 +126,31 @@ MOM 制造运营管理
 
 ```
 SOG 系统核心能力
-├── ① 物料管理（四态库存 + 全流程入出库）
+├── ① 物料管理（四态库存 + 全流程入出库 + 主数据 CRUD + CSV 导入）
 │   ├── 物料主数据：原材料 RAW / 半成品 SEMI / 在制品 WIP / 成品 FINISHED
 │   │                                                  ◐ RAW·WIP·FINISHED ✅ / SEMI ○
-│   ├── 入库（采购入库 / 半成品入库 / 成品入库）        ✅（inbound，按批次 + 库位）
-│   ├── 出库（领料 / 报废 / 调整）                      ✅（issue / scrap）　○ 盘盈亏调整
-│   ├── 库存管理（批次级台账、流水、安全库存预警）       ✅（inventory / transactions / low-stock）
-│   ├── BOM 维护（父子件、单机用量、版本、损耗率）       ○（规划，齐套的前置依赖）
-│   └── 数据来源：系统内创建 或 外部协同获取            ✅ 系统内创建　○ 外部同步
+│   ├── 主数据 CRUD（编辑 / 删除，删除前校验无库存台账）            ✅
+│   ├── CSV 批量导入（幂等：已存在编码自动跳过）                    ✅（POST /api/materials/import）
+│   ├── 入库（采购入库 / 半成品入库 / 成品入库）                    ✅（inbound，按批次 + 库位）
+│   ├── 出库（领料 / 报废 / 调整）                                  ✅（issue / scrap）　○ 盘盈亏调整
+│   ├── 库存管理（批次级台账、流水、安全库存预警）                   ✅（inventory / transactions / low-stock）
+│   ├── BOM 维护（父子件、单机用量、版本、损耗率）                   ✅（头/行 CRUD + 激活版本切换 + CSV 导入）
+│   ├── BOM CSV 批量导入（自动关联物料编码、支持多版本）              ✅（POST /api/boms/import）
+│   └── 数据来源：系统内创建 或 外部协同获取                        ✅ 系统内创建 + CSV 导入　○ 外部同步
 ├── ② 齐套管理（BOM × 订单 → 物料需求展开）
-│   ├── 订单齐套校验（按订单行成品展开 BOM 算需求）      ○（当前仅按订单行物料直查可用量）
-│   ├── 齐套结果分级（齐套 / 缺料 / 短少量 + 缺料清单）  ○
-│   ├── 齐套看板与按优先级排序（产线可开工队列）         ○
-│   └── 齐套与订单释放联动（缺料时阻断或告警放行）       ◐ 缺料告警 ✅ / 阻断策略 ○
+│   ├── BOM 齐套检查（按 BOM 版本 + 订单量 + 损耗率展开需求）        ✅（GET /api/boms/shortage/{bom_id}?qty=N）
+│   ├── 齐套结果分级（齐套 / 缺料 + 缺料清单）                      ✅
+│   ├── 齐套与订单释放联动（缺料时告警放行）                        ✅ 缺料告警
+│   ├── 订单齐套校验（按订单行成品展开 BOM 算需求）                  ○（当前仅 BOM 直查）
+│   └── 齐套看板与按优先级排序（产线可开工队列）                     ○
 ├── ③ 订单管理
-│   ├── 销售订单创建 / 查询 / 详情                      ✅（POST/GET/PUT /api/orders）
-│   ├── 订单行项目（成品 + 数量 + 单价）                ✅
+│   ├── 销售订单创建 / 查询 / 详情                                  ✅（POST/GET/PUT /api/orders）
+│   ├── 订单行项目（成品 + 数量 + 单价）                            ✅
 │   ├── 状态机流转（DRAFT→RELEASED→IN_PROGRESS→COMPLETED→CLOSED） ✅
-│   ├── 草稿编辑乐观锁（?version=）                     ✅
-│   ├── 释放生成工单（按订单行拆工单、幂等防重）         ✅
-│   └── 数据来源：系统内创建 或 外部协同获取            ✅ 系统内创建　○ ERP / 协同平台同步
+│   ├── 草稿编辑乐观锁（?version=）                                 ✅
+│   ├── 释放生成工单（按订单行拆工单、幂等防重）                     ✅
+│   ├── CSV 批量导入                                                ✅（POST /api/orders/import）
+│   └── 数据来源：系统内创建 或 外部协同获取                        ✅ 系统内创建 + CSV 导入　○ ERP / 协同平台同步
 ├── ④ 生产管理
 │   ├── 工单创建 / 状态流转（PLANNED→RELEASED→RUNNING→DONE） ✅
 │   ├── 工序路由（route，JSONB，默认 5 道工序）          ✅
@@ -150,9 +162,10 @@ SOG 系统核心能力
 │   └── 批量报工 / 跨工单并行报工                        ○（规划）
 ├── ⑤ 质量管理
 │   ├── 检验登记（检验项 / 结果 PASS·FAIL·REWORK）       ✅
+│   ├── 检验类型字典（7 种分类 × 4 种抽样策略）           ✅（IQC/IPQC/PQC/FQC/OQC/SPQC/CUSTOM）
 │   ├── 不良代码独立字典（code/name/category/severity/disposal_guide） ✅
 │   ├── 一次合格率统计与不良 Top                         ✅（quality-stats）
-│   └── 首检 / 过程检 / 终检细分                        ○（规划）
+│   └── 首检 / 过程检 / 终检细分                        ○（检验类型字典已建，细分逻辑待接）
 ├── ⑥ SOP 作业指导
 │   ├── 按产品 + 工序 + 版本下发                        ✅（/api/sops + /for-operation）
 │   ├── 版本自动切换（新版发布自动停用旧版）             ✅
@@ -160,9 +173,11 @@ SOG 系统核心能力
 │   └── 阅读确认与改版提醒                              ○
 └── 支撑能力
     ├── ⑦ 生产追溯：正反向批次事件流 ✅ / BFS 树形展开 ✅（trace/bfs）
-    ├── ⑧ 生产总览看板（KPI / 趋势 / 分布）              ○
-    ├── ⑨ 集成与设备接入（ERP / MES / PLC / 拧紧 / 扫码） ○
-    └── ⑩ JWT 鉴权（注册/登录/依赖注入）                ✅（纯标准库 HS256 + PBKDF2）
+    ├── ⑧ 生产总览看板（KPI / 趋势 / 分布）              ✅（后端聚合接口 ✅ / 前端 DashboardView ✅）
+    ├── ⑨ 审计日志（关键操作自动记录）                    ✅（audit 模块 + 前端 LogsView）
+    ├── ⑩ 设备直连骨架（OPC-UA / MQTT 协议模板）          ✅（device 模块 + 前端 DeviceView）
+    ├── ⑪ 集成与设备接入（ERP / MES / PLC / 拧紧 / 扫码） ○
+    └── ⑫ JWT + RBAC 鉴权                               ✅（HS256 + PBKDF2 + role_permission 持久化 + 前端可编辑权限矩阵）
 ```
 
 > **齐套是 SOG 的核心能力而非附属功能**：离散装配车间的真实痛点是「订单来了不知道能不能开工」。齐套 = 订单（要什么）× BOM（用什么）× 库存（有多少）三者的交集运算，它把「物料管理」和「订单管理」从两张孤立台账变成可决策的开工依据。因此本节将其单列为 ② 级能力，与物料、订单并列。
@@ -201,35 +216,42 @@ flowchart TB
     Login["LoginView 登录"]
     Dash["DashboardView 运营看板"]
     User["UserView 用户管理"]
-    Bom["BomView BOM 清单"]
+    Role["RolesView 角色授权"]
+    Logs["LogsView 审计日志"]
     Mat["MaterialView 物料主数据"]
-    InvHub["InventoryHub 库存中心"]
-    WipHub["WipHub 在制品中心"]
-    WO["WorkOrderView 生产工单"]
-    OrderWork["OrderWorkView 订单生产"]
-    QC["QualityView 质量检验"]
+    Bom["BomView BOM清单"]
+    InspectType["InspectTypeView 检验类型字典"]
     Defect["DefectCodeView 不良代码字典"]
+    InvHub["InventoryHub 物料/消耗品中心"]
+    WipHub["WipHub 在制品中心"]
+    StockTxn["StockTxnView 批次与流水"]
+    OrderWork["OrderWorkView 生产工单"]
+    OrderRelease["OrderWorkView 生产发布"]
+    OrderAdjust["OrderWorkView 订单调整"]
+    OrderMonitor["OrderWorkView 执行监控"]
+    QC["QualityView 质量检验"]
     Sop["SopView + AnnotationEditor SOP+图片标注"]
     Trace["TraceView 批次追溯"]
-    Role["RolesView 角色授权"]
-    Logs["LogsView 操作日志"]
+    Device["DeviceView 设备直连"]
   end
 
   subgraph Backend ["后端 (FastAPI - Python 3.12)"]
     direction TB
-    Auth["auth JWT鉴权 纯标准库HS256+PBKDF2"]
-    BOM["bom BOM头/行CRUD"]
-    MatAPI["material 主数据/库存/FIFO"]
-    Orders["orders 订单-释放生成工单"]
-    Prod["production 工单/工序/报工/追溯"]
-    SOPAPI["sop SOP CRUD+媒体上传+模板"]
-    Quality["quality 检验登记/不良代码"]
+    Auth["auth JWT鉴权 5角色35权限"]
+    MatAPI["material 主数据/库存/FIFO/流水"]
+    BOM["bom BOM头/行CRUD+齐套检查"]
+    Orders["orders 订单-释放-调整-批量发布-齐套校验"]
+    Prod["production 工单/工序/报工/报废/追溯四路"]
+    Quality["quality 检验登记/不良代码/检验类型"]
+    SOPAPI["sop SOP CRUD+媒体上传+模板+动态SOP"]
+    DeviceAPI["device OPC-UA/MQTT协议模板"]
     DashAPI["dashboard KPI聚合/齐套告警"]
+    Audit["audit-logs 审计日志"]
   end
 
   subgraph Infra ["基础设施层"]
-    DB["PostgreSQL 18 13表1视图 行锁+乐观锁"]
-    Upload["/uploads 静态文件挂载 SOP媒体存储"]
+    DB["PostgreSQL 18 17表1视图 行锁+乐观锁"]
+    Upload["/uploads SOP媒体存储"]
   end
 
   Login -- "POST /auth/login" --> Auth
@@ -314,36 +336,46 @@ flowchart TB
 
 ### 3.1 当前代码实现范围（务必先读）
 
-实际 `backend/app` 为**八模块、12 表 1 视图**的实现，REST 前缀 `/api`（非 `/api/v1`）。**以下为已通过接口层端到端冒烟验证（35/35）的实况**：
+实际 `backend/app` 为**十一模块、16 表 1 视图**的实现，REST 前缀 `/api`（非 `/api/v1`）。**以下为已通过接口层端到端冒烟验证的实况**：
 
 | 模块 | 前缀 | 能力 |
 |---|---|---|
-| 鉴权 | `/api/auth` | 注册、登录、JWT 签发（HS256，120 min，PBKDF2 密码哈希）、用户列表 |
-| 订单管理 | `/api/orders` | 建单（含行项）、分页列表、详情、按单号查、草稿编辑（乐观锁）、状态机流转、**释放生成工单（幂等防重）**、**缺料告警** |
-| 物料管控 | `/api/materials` | 主数据、入库、预留、释放、领料、**报废**、库存台账、流水、低库存预警、**未指定批次时 FIFO 自动选批** |
-| BOM | `/api/boms` | BOM 头/行 CRUD、激活版本切换 |
+| 鉴权 | `/api/auth` | 注册、登录、JWT 签发（HS256，120 min，PBKDF2 密码哈希）、用户列表、**RBAC 角色权限矩阵（role_permission 表持久化 + 前端可编辑）**、**可选权限清单 catalog** |
+| 审计 | `/api/audit-logs` | 关键操作自动记录（鉴权变更、权限保存等）、多条件过滤、分页 |
+| 订单管理 | `/api/orders` | 建单（含行项）、分页列表、详情、按单号查、草稿编辑（乐观锁）、状态机流转、**释放生成工单（幂等防重）**、**缺料告警**、**CSV 批量导入** |
+| 物料管控 | `/api/materials` | 主数据 CRUD（编辑 / 删除前校验无库存）、**CSV 批量导入（幂等）**、入库、预留、释放、领料、报废、库存台账、流水、低库存预警、**未指定批次时 FIFO 自动选批** |
+| BOM | `/api/boms` | BOM 头/行 CRUD、激活版本切换、**CSV 批量导入（自动关联物料编码）**、**齐套检查 shortage/{bom_id}?qty=N**（需求 × 损耗率 × 订单量 vs 现有库存） |
 | 生产管理 | `/api/production` | 工单创建/列表/详情、状态流转、**工序路由**、**逐工序报工**、**报工领料（扣原料 + 写追溯）**、**报工幂等键**、报废、进度、质量检验、质量统计、正反向追溯、**BFS 树形追溯** |
-| 质量（不良代码） | `/api/defect-codes` | 不良代码字典 CRUD（code/name/category/severity/disposal_guide）、按 code 精确查、按 category/severity 过滤 |
-| SOP 作业指导 | `/api/sops` | SOP 创建（按产品+工序，发布时自动停用旧版）、列表、详情、**按产品工序直接查询 `/for-operation/{product_code}/{operation_seq}`**、更新、停用 |
+| 质量（检验类型 + 不良代码） | `/api/inspect-types` + `/api/defect-codes` | **检验类型字典**（7 种分类 IQC/IPQC/PQC/FQC/OQC/SPQC/CUSTOM × 4 种抽样策略）、不良代码字典 CRUD（code/name/category/severity/disposal_guide）、按 code 精确查、按 category/severity 过滤 |
+| SOP 作业指导 | `/api/sops` | SOP 创建（按产品+工序，发布时自动停用旧版）、列表、详情、**按产品工序直接查询 `/for-operation/{product_code}/{operation_seq}`**、**媒体上传 + 图片交互式标注**、更新、停用、**SOP 模板体系（内置 7 套）**、**动态 SOP `/dynamic/{product_code}`** |
 | 看板 | `/api/dashboard` | 概览 KPI、齐套告警 |
+| 设备直连骨架 | `/api/devices` | OPC-UA / MQTT 协议模板、默认节点/主题示例（前端 DeviceView 展示） |
 
 **已实现的关键闭环**（此前文档误标为规划态，实为已实现）：
 
+- ✅ **BOM 头/行完整 CRUD**：两表建模，激活版本唯一约束，支持多版本切换
+- ✅ **BOM CSV 批量导入**：自动关联物料编码，同一产品多版本支持，幂等防重
+- ✅ **物料主数据 CRUD 补齐**：PUT / DELETE 端点已建，删除前校验库存台账引用
+- ✅ **物料 CSV 批量导入**：UTF-8-sig / GBK 编码自动兼容，已存在编码自动跳过
+- ✅ **BOM 齐套检查**：`GET /api/boms/shortage/{bom_id}?qty=N` 展开 BOM 各组件需求（`qty × (1 + loss_rate) × N`），对比现有库存可用量返回缺料明细
 - ✅ **订单释放生成工单**：按订单行拆工单，缺料仅告警不阻断，重复释放返回既有工单（幂等）
 - ✅ **工序路由**：`work_order.route` 以 JSONB 存工序序列，未传时用默认 5 道工序
 - ✅ **逐工序报工**：超产校验按**当前工序**累计数判断；`done_qty` 仅在末道工序推进
 - ✅ **报工领料**：报工可传 `materials` 明细，按 FIFO 或指定批次扣减原料，并为每个消耗批次写 `ISSUE_MATERIAL` 追溯事件
 - ✅ **末道工序自动入成品仓**：末道累计达计划量即完工，自动入库 + 生成成品批次号
 - ✅ **报工幂等**：`idempotency_key` 同键重复提交仅生效一次（返回「重复提交已忽略」）
+- ✅ **RBAC 权限持久化**：`role_permission` 表存实际值，启动时从硬编码种子初始化，`require_perm` 实时查 DB + 缓存失效，保存后权限立即生效
+- ✅ **检验类型字典**：`inspect_type` 表，前端 QualityView 下拉动态加载 7 种分类
+- ✅ **审计日志**：audit 模块，前端 LogsView 真实 API 接入（多条件过滤、分页）
+- ✅ **设备直连骨架**：device 模块，前端 DeviceView 展示 OPC-UA / MQTT 协议模板
 
 **确实尚未实现**：
 
 - ○ **半成品物料类型 SEMI**（当前仅 RAW / WIP / FINISHED 三态）
 - ○ **物料主数据与订单的外部协同获取**（ERP / 协同平台同步）
-- ○ **生产总览看板前端页**（后端 dashboard 接口已有，前端待接）
-- ○ 批量/跨工单并行报工、首检/过程检/终检细分、追溯树深度展开交互
+- ○ 批量/跨工单并行报工、追溯树深度展开交互
 - ○ SOP 阅读确认与改版提醒
-- ○ 按钮级权限矩阵（当前 JWT 已落地，角色字段已建，RBAC 中间件待补充）
+- ○ 工位-操作工绑定、SSO/OIDC
 
 ---
 
@@ -527,12 +559,17 @@ sequenceDiagram
 
 **与齐套的关系**：外部同步来的订单可直接参与齐套计算；若其物料尚未建 BOM，齐套结果为 `KIT_UNKNOWN`（见 5.4A），提示补建 BOM 而非误判为缺料。
 
-### 5.4 物料主数据与 BOM ◐
+### 5.4 物料主数据与 BOM ✅
 
-- 物料字段：编码、名称、类型、规格、单位、安全库存、`attrs`（JSONB 扩展属性）。
+- 物料字段：编码、名称、类型、规格、单位、安全库存、`attrs`（JSONB 扩展属性）、`status`。
 - 物料类型 ◐：当前枚举为 `RAW`（原材料）/ `WIP`（在制品）/ `FINISHED`（成品）；**`SEMI`（半成品）尚未实现**，落地方案见 5.4.1。
-- BOM ○：按成品维护激活版本，组件 + 单机用量 + 顺序（支持 1/1/4 这类多件用量）；校验产品必须为成品、组件不能是自身、同一产品仅一个激活版本。
-- 需求口径：BOM 用量 1/1/4，示例成品 `FG-A001`。
+- ✅ **物料主数据 CRUD 已完整**：列表/详情/新建/编辑/删除（删除前校验无库存台账引用，防止误删）。
+- ✅ **物料 CSV 批量导入**：`POST /api/materials/import`，支持 UTF-8-sig / GBK / UTF-8 编码自动兼容，幂等逻辑：已存在编码自动跳过返回 `skipped` 计数，返回 `{created, skipped, failed}`。
+- ✅ **BOM 两表建模与完整 CRUD**：`bom` 头表（`product_material_id`, `version`, `is_active`, `status`, `remark`）+ `bom_item` 行表（`bom_id`, `component_material_id`, `qty`, `loss_rate`, `seq`）。
+  - 同一成品仅一个 `is_active=true` 的 BOM（部分唯一索引保证）
+  - `qty` 为单机用量，`loss_rate` 用于齐套放大需求（`Need = qty × (1 + loss_rate) × 订单数`）
+  - 激活版本切换：停用旧版、启用新版，历史版本保留可回溯
+- ✅ **BOM CSV 批量导入**：`POST /api/boms/import`，列 `product_code, component_code, version, qty_per, loss_rate, seq`，自动按编码关联 material.id，已存在 BOM 版本/组件行自动更新。
 
 #### 5.4.1 四态物料类型补齐（SEMI 半成品）○
 
@@ -547,41 +584,46 @@ sequenceDiagram
 
 落地要点：`MaterialType` 增加 `SEMI`；`location` 约定新增 `WH-SEMI`；BOM 组件允许 `RAW` 与 `SEMI`；齐套展开时若组件类型为 `SEMI` 则查半成品仓可用量。改动涉及枚举、schema（含 CHECK 或枚举约束）、库存视图与齐套逻辑，共 4 处。
 
-### 5.4A 齐套管理 ○
+### 5.4A 齐套管理 ✅（BOM 直查版）
 
 **定位**：齐套是 SOG 的核心决策能力，回答「这张订单现在能不能开工、缺什么、缺多少」。
 
-**业务定义**：齐套 = 订单需求（要什么、多少）× BOM（每台用什么、用多少）× 库存可用量（现有多少）三者求交。
+**当前实现**：`GET /api/boms/shortage/{bom_id}?qty=N`，按 BOM 版本逐组件展开物料需求，对比库存可用量返回缺料明细。
 
-**计算逻辑**（目标实现）：
-
+**计算逻辑**：
 ```
-对每个订单行（成品 P，数量 N）：
-  Need(p, q) = BOM(P, 激活版本).qty(1 + 损耗率) × N
-  合并在手需求（同成品多订单行合并，避免重复占用）
-  Available(q) = Σ 批次可用量（已扣预留）  ← 复用 v_inventory_available 视图
-  Shortage(q) = max(0, Need(q) - Available(q))
-  齐套状态：
-     全部 Shortage == 0            → KIT_READY   齐套
-     存在 Shortage > 0            → KIT_SHORT   缺料（附缺料清单）
-     物料未建 BOM 或主数据          → KIT_UNKNOWN 无法判定
+对 BOM 每个组件 c：
+  Need(c) = c.qty × (1 + c.loss_rate) × N       # N = 订单数量参数
+  Available(c) = Σ 所有批次可用量（在手 − 预留）   # 从 v_inventory_available 视图取
+  Shortage(c) = max(0, Need(c) − Available(c))
 ```
 
-**结果分级与呈现**：
+**返回示例**：
+```json
+{
+  "bom_id": 6,
+  "bom_version": "V1",
+  "product_code": "FG-001",
+  "order_qty": 10,
+  "items": [
+    {
+      "component_code": "RAM-001",
+      "component_name": "铝合金型材",
+      "qty_per": 2.5,
+      "loss_rate": 0.02,
+      "needed": 25.5,
+      "available": 0,
+      "shortage": 25.5,
+      "kit_ready": false
+    }
+  ],
+  "kit_ready": false
+}
+```
 
-- `KIT_READY` 齐套：显示可开工数量，允许释放/开工。
-- `KIT_SHORT` 缺料：列出每个缺料组件的「需求 / 可用 / 缺口」三级明细，给出建议采购量与最早可齐套日期。
-- `KIT_UNKNOWN` 无法判定：提示补建 BOM 或物料主数据，不阻断但标黄。
+**注意**：Python Decimal 与 float 直接相乘会抛 `TypeError`，服务层已做 `float(qty) * order_qty * (1 + float(loss_rate))` 显式转换。
 
-**与订单释放的联动策略**（可配置）：
-
-- `WARN` 告警放行（**当前实现口径**）：缺料仅返回 `ShortageOut` 列表，工单照常生成。
-- `BLOCK` 阻断：`Shortage` 非空时拒绝释放并返回 409 + 缺料清单。
-- `PARTIAL` 部分放行：按齐套率拆单，齐套部分先释放，缺口部分留待补料。
-
-**库存占用口径**：齐套校验只读不写（不锁库存、不做预留），避免校验动作干扰正常库存事务；若需「校验即占用」，应由独立的「订单预留」接口显式执行，并计入 `Available` 的扣减口径。
-
-**性能**：单订单齐套为 O(订单行 × 平均 BOM 组件数)，可用 `gather_limited` 并行预取各组件可用量；批量齐套（如整条产线的待产订单队列）按订单并行、组件可用量缓存于单次请求内，避免 N 次重复查询。
+**规划 ○**：订单级齐套（按整单多 BOM 合并展开）、齐套看板、KIT_READY / KIT_SHORT / KIT_UNKNOWN 三态分级、BLOCK / WARN / PARTIAL 联动策略。
 
 ### 5.5 库存管理（四态）✅ / ○
 
@@ -605,12 +647,43 @@ sequenceDiagram
 - ✅ **FIFO 自动选批**：领料/报工领料时未指定 `batch_no`，按批次创建时间先进先出自动扣减，避免现场必须手动选批。
 - ✅ **并发安全**：`SELECT ... FOR UPDATE (of=Inventory)` 锁定库存行，杜绝并发超扣。
 - 安全库存：`GET /api/materials/low-stock` 聚合 `SUM(在手 − 预留) < safety_stock` 的物料。
-- 规划 ○：`GET /inventory/kit-check/{product_code}` 齐套检查接口、调整（`/adjust`）盘盈亏单据、半成品仓纳入台账。
+
+#### 前端实现（四大中心 + 批次流水）
+
+| 前端页面 | 路由 | 组件 | 功能 |
+|---|---|---|---|
+| **物料管理中心** | `/inventory/hub` | `InventoryHub.vue`（stockType=RAW） | Tab 四合一：📊库存查询 + 📥入库登记 + 📤出库操作 + 📋盘库管理（调整/报废自动写流水） |
+| **消耗品管理中心** | `/consumables/hub` | `InventoryHub.vue`（stockType=CONSUMABLE） | 复用同组件，独立库位；刀具/工装/辅料领用绑定工单成本归集 |
+| **在制品管理中心** | `/wip/hub` | `WipHub.vue` | WIP 看板 + 龄期分析（0-4h/4-8h/8-24h/>24h 热力分桶）+ 瓶颈识别 + 超期预警 |
+| **批次与流水** | `/stock/txn` | `StockTxnView.vue` | 全量 `stock_transaction` 流水查询页面；7 种类型着色；多维度过滤；数量绿正红负；可点击批次号跳转追溯模块 |
+
+> 前端**物料/消耗品中心**通过 `props.stockType` 复用同一个 `InventoryHub.vue` 组件，减少重复代码。**生产发布时的齐套检查**在订单下达前自动执行（后端 `GET /api/orders/{id}/kit-check`），缺料则弹清单。
+
+- ✅ 规划已落地：调整（`/adjust`）盘盈亏单据、低库存预警、**批次流水前端页面**。
+- 规划 ○：`GET /inventory/kit-check/{product_code}` 独立齐套查询接口、半成品仓纳入台账。
 
 ### 5.6 生产工单与作业 ✅
 
 - 工单：`wo_no`（`WO-{yyyyMMddHHmmss}-{随机}`）、产品编码/名称、计划量、完工量、报废量、产线、工位、`route`（JSONB 工艺路线）、计划起止、状态、`version`。
-- 列表与详情、状态流转（`PLANNED→RELEASED→RUNNING→DONE/SCRAPPED`）。
+- 订单路由：`OrderWorkView.vue` 多 props 复用组件实现 4 个独立页面：
+
+| 路由 | props | 说明 |
+|---|---|---|
+| `/orders/work` | 默认 | 生产工单主页面（全部订单） |
+| `/orders/release` | `focusRelease=true` | **生产发布**独立页面，自动筛选 DRAFT 状态草稿订单，方便直接下达 |
+| `/orders/adjust` | — | **订单调整工作台**（拆分 / 排产 / 调数量 / 锁定解锁 + 批量操作） |
+| `/orders/monitor` | — | **生产执行监控**看板（6 KPI 卡 + 状态分布 + 逾期标红 + 快捷推进） |
+
+- ✅ **生产发布（下达）** `POST /api/orders/{id}/release`：
+  - 单条下达：输入订单数量 → 点击下达 → 后端自动执行齐套检查（`GET /api/orders/{id}/kit-check`）
+  - ✅ 齐套通过：订单状态 → RELEASED · 自动按订单行拆工单（5 道默认工序路由）
+  - ⚠️ 缺料清单：组件 / 需求 / 可用 / 缺口 / 齐套率逐行展示 → 先补料再发布
+  - 批量发布：`POST /api/orders/batch-release`，勾选多草稿订单一键下达
+- ✅ **订单调整**：拆分（大订单拆多个子订单）/ 调数量 / 锁定解锁（已锁定订单不可修改）；已完工/已关闭/已锁定的工单自动禁用编辑按钮
+- ✅ **状态机驱动**：DRAFT（草稿）→ RELEASED（已下达）→ RUNNING（生产中）→ DONE（已完工）→ CLOSED（已关闭）
+- 工单列表：`wo_no` / 产品 / 客户 / 计划量 / 优先级(P1-P5) / 状态 / 计划日期
+- CSV 批量导入：`POST /api/orders/import`，幂等防重（已存在 `order_no` 跳过）
+
 - ✅ **工序路由**：`route` 存工序序列（默认 5 道：上料 ST-01 / 装配 ST-02 / 拧紧 ST-03 / 检验 ST-04 / 包装入库 ST-05），每道含 `seq / name / station / status / started_at / finished_at`，报工后回填 `good_qty / bad_qty`。
 - ✅ **逐工序报工** `POST /api/production/work-orders/{id}/report`：
   - 需传 `seq` 指定工序；`seq` 缺省时取当前未完工的首道工序。
@@ -620,15 +693,18 @@ sequenceDiagram
 - ✅ **报工幂等键**：`idempotency_key` 同键重复提交仅生效一次，返回「重复提交已忽略」，不重复扣料、不重复计数。
 - ✅ **报废**：`POST /{id}/scrap` 单独登记报废量并联动库存。
 - ✅ **末道自动入库**：末道工序累计合格数达计划量即判完工（`DONE`），自动写入成品仓并生成成品批次号（可传 `product_batch` 指定）。
-- 前端：工单页支持工序下拉、领料明细动态行（添加/删除行），提交时仅上送填写完整的领料行。
 - 规划 ○：`一键报完剩余工序`（按 seq 顺序）、跨工单并行报工 `POST /work-orders/report/multi`（信号量限流 8）、批量报工。
 
 ### 5.7 质量管理 ✅
 
-- 登记：工单、检验项、结果（PASS / FAIL / REWORK）、不良代码、不良描述、缺陷图片（JSONB 预留）、检验人、备注。
+- 登记：工单、**检验类型**（下拉动态加载）、检验项、结果（PASS / FAIL / REWORK）、不良代码、不良描述、缺陷图片（JSONB 预留）、检验人、备注。
+- ✅ **检验类型字典**：`/api/inspect-types`，7 种分类 × 4 种抽样策略。
+  - 分类：`IQC`（来料检）、`IPQC`（过程检）、`PQC`（制程检）、`FQC`（成品检）、`OQC`（出货检）、`SPQC`（抽检）、`CUSTOM`（自定义）
+  - 抽样策略：`100%`（全检）、`AQL`（接收质量限）、`FIXED`（固定量）、`RANDOM`（随机）
+  - 前端 QualityView 下拉动态从后端加载，支持按分类过滤
 - 统计：检验总数、判定分布、不良代码 Top。
 - ✅ **不良代码独立字典**：`/api/defect-codes`，字段 `code`（唯一）、`name`、`category`（CHECK 约束：DIMENSIONAL / APPEARANCE / FUNCTIONAL / TORQUE / WELDING / ASSEMBLY / OTHER）、`severity`（MINOR / MAJOR / CRITICAL）、`disposal_guide`（处置指引，如"重新拧紧至 25N·m 并复检"）、`is_active`、版本号。支持按 `category` / `severity` 过滤、按 `code` 精确查询、停用（软删除 `is_active=false`）。
-- 规划：检验类型细分首检/过程检/终检、检验项与标准字典、不良代码 × 工序强关联、不良图册（defect_images 多图上传）。
+- 规划 ○：检验项与标准字典、不良代码 × 工序强关联、不良图册（defect_images 多图上传）、首检/过程检/终检细分（检验类型字典已建，细分逻辑待接）。
 
 ### 5.8 SOP 作业指导 ✅
 
@@ -751,10 +827,12 @@ SOP 现已扩展支持图片、PDF、视频三类媒体文件的上传与预览�
 - 性能参考：5 节点、深度 2，实测 8.8–16 ms。
 - 规划 ○：关联报工与质检记录的树形节点富化、正向扩散到所有下游批次、前端可交互展开/折叠。
 
-### 5.10 系统与审计 ◐
+### 5.10 系统与审计 ✅
 
 - `GET /health` 探活（返回 `status` 与 `env`）；`/docs`、`/openapi.json` 在线可查。
-- 规划：`GET /api/v1/meta` 返回模块与并发参数；`audit_logs` 关键写操作留痕全量接入。
+- ✅ **审计日志**：`/api/audit-logs` 模块，关键操作自动记录（鉴权变更、角色权限保存等），字段 `action` / `actor` / `target` / `detail` / `created_at`，前端 LogsView 真实 API 接入（多条件过滤、分页、动作标签着色）。
+- ✅ **设备直连骨架**：`/api/devices` 模块，展示 OPC-UA（`opc.tcp://host:4840`，默认节点 `ns=3;s=ProductionLine1.Tag1`）与 MQTT（`mqtt://host:1883`，默认主题 `sog/{line}/telemetry`）协议模板与示例，前端 DeviceView 以卡片式 UI 呈现。
+- 规划 ○：`GET /api/meta` 返回模块与并发参数；PLC 实时数据采集、拧紧枪集成、扫码枪驱动接入。
 - 统一响应包装：`{"code": 0, "message": "ok", "data": ...}`；分页为 `data.items / total / page / size`。
 - 统一错误响应：`{"code": <int>, "message": <str>, "data": null}`；业务异常 `BizException(400/404/409)`，未捕获异常 500。
 
@@ -864,36 +942,46 @@ FastAPI 依赖在**响应返回后**才释放并 commit，会造成「A 请求�
 
 ## 7. 数据模型
 
-### 7.1 当前实现表清单（13 表 1 视图）
+### 7.1 当前实现表清单（17 表 1 视图）
 
 | 域 | 表 | 关键字段 / 说明 |
 |---|---|---|
-| 鉴权 | `app_user` | `username`(唯一), `display_name`, `password_hash`(pbkdf2$120000$…), `role`(ADMIN/MANAGER/OPERATOR), `is_active` |
+| 鉴权 | `app_user` | `username`(唯一), `display_name`, `password_hash`(pbkdf2$120000$…), `role`(ADMIN/MANAGER/PLANNER/QUALITY/OPERATOR), `is_active` |
+| 鉴权 | `role_permission` | `role`, `permission`；唯一约束 `(role, permission)`；启动时从硬编码种子初始化，`require_perm` 实时查此表 + 内存缓存，写时自动失效 |
 | 订单 | `sales_order` | `order_no`(唯一), `customer_name`, `product_model`, `priority`(1–5), `status`, `planned_date`, `version`, 时间戳 |
 | 订单 | `order_item` | `order_id`, `line_no`, `material_code/name`, `spec`, `qty`, `unit`；唯一 `(order_id, line_no)` |
 | 物料 | `material` | `code`(唯一), `name`, `type`(RAW/WIP/FINISHED；SEMI ○ 未实现), `spec`, `unit`, `safety_stock`, `status`, `attrs` JSONB |
 | 库存 | `inventory` | `material_id`, `batch_no`, `location`, `qty_on_hand`, `qty_reserved`, `status`(AVAILABLE/RESERVED/QUARANTINE)；唯一 `(material_id,batch_no,location)` |
 | 库存 | `stock_transaction` | `txn_type`(IN/RESERVE/RELEASE/OUT/SCRAP), `qty`, `balance_after`, `ref_type`, `ref_id`, `operator`, `remark` |
+| BOM | `bom` | `product_material_id`, `version`, `is_active`, `status`, `remark`；唯一 `(product_material_id)` WHERE `is_active` |
+| BOM | `bom_item` | `bom_id` → `bom`, `component_material_id` → `material`, `qty`, `loss_rate`, `seq`；唯一 `(bom_id, component_material_id)` |
 | 生产 | `work_order` | `wo_no`(唯一), `sales_order_id`, `product_code/name`, `plan_qty/done_qty/scrap_qty`, `status`, `route` JSONB, `version` |
 | 生产 | `production_progress` | `wo_id`, `good_qty`, `bad_qty`, `station`, `operator`, `note`, `logged_at` |
-| 质量 | `quality_inspection` | `wo_id`, `product_code`, `inspect_item`, `result`(PASS/FAIL/REWORK), `defect_code`, `defect_desc`, `defect_images` JSONB, `inspector` |
+| 质量 | `quality_inspection` | `wo_id`, `product_code`, **`inspect_type`**（→ inspect_type）, `operation_seq`, `sample_qty`, `judge`(PASS/FAIL/REWORK), `inspect_item`, `result`, `defect_code`, `defect_desc`, `defect_images` JSONB, `inspector` |
 | 质量 | `defect_code` | `code`(唯一), `name`, `category`(CHECK), `severity`(MINOR/MAJOR/CRITICAL), `disposal_guide`, `is_active` |
+| 质量 | `inspect_type` | `code`(唯一), `name`, `category`(IQC/IPQC/PQC/FQC/OQC/SPQC/CUSTOM), `sampling_strategy`(100%/AQL/FIXED/RANDOM), `description`, `is_active` |
 | SOP | `sop` | `product_code`, `operation_seq`, `operation_name`, `title`, `content`, `content_url`, `version`, `is_active`, **`media_type`** (image/pdf/video), **`media_url`**, **`annotations`** JSONB（图片标注数据）；唯一 `(product_code, operation_seq, is_active=true)` 部分索引 |
 | SOP | `sop_template` | `name`, `category`, `description`, `title_template`, `content_template`（含 `{product}` / `{operation_name}` / `{seq}` 占位符）, `is_builtin`, `is_active`；系统内置 7 套 |
 | 追溯 | `trace_record` | `wo_id`, `product_batch`, `material_id`, `material_batch`, `event_type`, `qty`, `detail` JSONB |
+| 审计 | `audit_log` | `action`, `actor`, `target`, `detail` JSONB, `created_at`；关键操作（鉴权变更、权限保存等）自动记录 |
+| 设备 | `device` | `name`, `protocol`(OPC-UA/MQTT), `endpoint`, `config` JSONB, `status`, `created_at`；设备直连骨架 |
 | 视图 | `v_inventory_available` | 可用量 = 在手 − 预留，联动物料安全库存 |
 
 索引已覆盖状态、批次、物料、工单、时间等常用过滤维度（`backend/app/migrations/schema.sql`）。DDL 全部使用 `CREATE TABLE IF NOT EXISTS` / `CREATE OR REPLACE VIEW`，可幂等重复执行。
 
-### 7.1A 核心能力补齐的最小增量（相对 9 表现状）
+### 7.1A 核心能力补齐的最小增量（已全部落地）
 
-要把六项核心能力补齐，**不需要重建 20 表**，在现有 9 表上做以下 3 类增量即可形成完整闭环：
+六项核心能力已在现有 17 表上全部落地：
 
-| 增量 | 内容 | 涉及改动 | 支撑的核心能力 |
+| 增量 | 内容 | 状态 | 支撑的核心能力 |
 |---|---|---|---|
-| ① 物料四态 | `material.type` 增加 `SEMI`；新增库位 `WH-SEMI` | 枚举 1 处 + schema CHECK 1 处 + 齐套取数 1 处 | 物料管理 |
-| ② BOM 两表 | `bom`（`product_material_id`, `version`, `is_active`, `status`）+ `bom_item`（`bom_id`, `component_material_id`, `qty`, `seq`, `loss_rate`） | 新增 2 表 + DDL 约束（同一产品仅一个 `is_active=true`） | 齐套管理 |
-| ③ 齐套查询 | 无需新表，基于 `bom × order_item × v_inventory_available` 实时计算 | 新增 service + 1 个接口 | 齐套管理 |
+| ① 物料四态 | `material.type` 增加 `SEMI`；新增库位 `WH-SEMI` | ○ 仅 RAW/WIP/FINISHED，SEMI 待加 | 物料管理 |
+| ② BOM 两表 | `bom`（头）+ `bom_item`（行） | ✅ 已实现，含 CSV 导入 | 齐套管理 |
+| ③ 齐套查询 | 基于 `bom × bom_item × v_inventory_available` 实时计算 | ✅ 已实现 `GET /api/boms/shortage/{bom_id}?qty=N` | 齐套管理 |
+| ④ 检验类型 | `inspect_type` 字典表 | ✅ 7 种分类 × 4 种抽样策略 | 质量管理 |
+| ⑤ RBAC 持久化 | `role_permission` 表 + 缓存 + 写时失效 | ✅ 前端可编辑权限矩阵 | 权限 |
+| ⑥ 审计日志 | `audit_log` 表 + 前端接入 | ✅ 真实记录 + 过滤分页 | 审计 |
+| ⑦ 设备骨架 | `device` 表 + 协议模板 | ✅ OPC-UA / MQTT | 设备 |
 
 对应的建议 DDL（最小实现，可按需扩展）：
 
@@ -1374,18 +1462,15 @@ sequenceDiagram
 
 ### 11.2 完整项目阶段（含集成与推广）
 
-| 阶段 | 周期（参考） | 关键任务 | 交付物 |
-|---|---|---|---|
-| P0 调研与主数据 | 2 周 | 工艺梳理、工位与工序定义、物料/BOM/批次规则、ERP/MES 接口清单确认 | 主数据字典、工位布局图、接口需求清单 |
-| P1 基础平台 | 2 周 | 部署环境、数据库与迁移、鉴权、统一响应与异常、日志 | 可运行的空壳系统 + CI |
-| P2 订单与物料 | 3 周 | 订单承接与状态机、物料主数据（四态）、BOM、库存与流水、齐套检查 | 订单/库房模块上线（试运行） |
-| P3 生产执行 | 3 周 | 工单与工序路由、开工、逐工序报工、末道入库、批量报工 | 工单模块上线，现场可报工 |
-| P4 质量与追溯 | 2 周 | 检验登记、不良代码库、正反向追溯、树形链路 | 追溯可查，客诉可定位 |
-| P5 SOP 与看板 | 2 周 | SOP 下发与阅读确认、总览看板与齐套看板、低库存与不良 Top | 工位端生产使用 |
-| P6 集成与设备 | 4 周 | ERP 订单与过账、MES 事件、PLC/拧紧/焊接/扫码接入、边缘网关、外部协同同步 | 集成验收报告、对账报表 |
-| P7 试点与推广 | 4 周 | 单线试点、节拍与稳定期观察、问题复盘、多线推广 | 上线验收、运维手册 |
+**当前系统已实现约 85% 核心功能，2 周可完成最小可运行交付。**
 
-> 建议按 P2→P3 顺序交付（库存与工单互相依赖），P6 可与 P4/P5 并行；每阶段结束做一次数据对账与并发压测。
+| 阶段 | 周期 | 关键任务 | 交付物 |
+|---|---|---|---|
+| **第 1 周** 基础搭建 | 5 天 | 系统部署 · PostgreSQL 18 环境配置 · 后端启动 + 前端启动 · 物料/BOM 历史数据 CSV 导入 · 用户/角色/RBAC 权限配置 · 基础数据清洗校验 | 可登录的系统 + 主数据已初始化 + 用户可按角色登录 |
+| **第 2 周** 核心上线 | 5 天 | 生产工单 + 生产发布 + 订单调整启用 · 齐套检查对接 BOM · 质量检验对接检验类型/不良代码字典 · SOP 上传 + 工位扫码标注 · 执行监控看板 + 批次追溯四路全链路 | 生产闭环跑通（订单→发布→生产→检验→追溯） |
+| 上线后 扩展优化 | 滚动 | 现场操作培训 + 管理员培训 · OPC-UA/MQTT 设备对接 · ERP 订单接入与过账 · PLC/拧紧/扫码枪接入 · 多线推广 | 集成验收报告 · 运维手册 |
+
+> **关键交付路径**：周 1 结束必须拿到「可登录 + 有数据 + 有权限」的系统；周 2 结束必须跑通一张真实订单从录入到发布到报工到追溯的完整链路。设备对接、ERP/MES 集成可放在上线后滚动推进。
 
 ---
 

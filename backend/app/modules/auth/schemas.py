@@ -1,4 +1,4 @@
-﻿"""认证请求响应模型。"""
+"""认证请求响应模型。"""
 from datetime import datetime
 
 from pydantic import BaseModel, Field
@@ -33,3 +33,15 @@ class UserOut(BaseModel):
     created_at: datetime
 
     model_config = {"from_attributes": True}
+
+
+class UserUpdate(BaseModel):
+    display_name: str | None = Field(None, max_length=128)
+    role: str | None = Field(None, pattern="^(ADMIN|MANAGER|PLANNER|OPERATOR|QUALITY)$")
+    station_code: str | None = Field(None, max_length=32)
+    is_active: bool | None = None
+    password: str | None = Field(None, min_length=6, max_length=128)
+
+
+class RolePermUpdate(BaseModel):
+    permissions: list[str]

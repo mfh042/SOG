@@ -20,43 +20,50 @@ dev/
 │   ├── pyproject.toml
 │   ├── .env.example             # 环境配置（连接池 / 线程 / 并发 / 跨域）
 │   ├── uploads/sop/             # SOP 媒体文件存储（自动创建）
+│   ├── scripts/csv_import.py    # 离线 CSV 批量导入脚本（orders / materials / boms）
 │   ├── smoke_test.py            # 接口层端到端冒烟测试
 │   └── app/
-│       ├── main.py              # FastAPI 入口、CORS、异常处理、/health、静态文件挂载
-│       ├── core/                # 基础设施层（config / db / deps / concurrency / response / exceptions）
+│       ├── main.py              # FastAPI 入口、CORS、异常处理、/health、静态文件挂载、种子初始化
+│       ├── core/                # 基础设施层（config / db / deps / concurrency / response / exceptions / permissions）
 │       ├── common/              # 枚举、分页、基类
 │       ├── modules/             # 业务模块（router → service → repository → models → schemas）
-│       │   ├── auth/            # JWT 鉴权（纯标准库 HS256 + PBKDF2 密码哈希）
+│       │   ├── auth/            # JWT 鉴权 + RBAC 角色权限持久化（纯标准库 HS256 + PBKDF2 + role_permission 表）
+│       │   ├── audit/           # 审计日志（关键操作自动记录）
 │       │   ├── orders/          # 订单管理（含释放生成工单、CSV 批量导入）
-│       │   ├── material/        # 物料管控（主数据 / 库存 / 流水 / FIFO）
-│       │   ├── bom/             # BOM 头/行 CRUD + 激活版本切换
+│       │   ├── material/        # 物料管控（主数据 CRUD + CSV 导入 / 库存 / 流水 / FIFO）
+│       │   ├── bom/             # BOM 头/行 CRUD + 激活版本切换 + CSV 导入 + 齐套检查
 │       │   ├── production/      # 生产管理（工单 / 工序 / 报工 / 追溯 / BFS 树形）
-│       │   ├── quality/         # 不良代码独立字典（code/name/category/severity/disposal_guide）
-│       │   ├── sop/             # SOP 作业指导（产品+工序+版本 + **媒体上传 + 图片标注**）
+│       │   ├── quality/         # 检验类型字典 + 检验登记 + 不良代码独立字典
+│       │   ├── device/          # 设备直连骨架（OPC-UA / MQTT 协议模板）
+│       │   ├── sop/             # SOP 作业指导（产品+工序+版本 + 媒体上传 + 图片标注）
 │       │   ├── dashboard/       # 看板聚合（概览 KPI / 齐套告警）
 │       │   └── migrations/schema.sql # PostgreSQL 18 DDL（幂等）
 └── front/                       # Vue 3 前端（Vite）
     ├── package.json
     ├── vite.config.js           # /api 和 /uploads 代理到后端
     └── src/
-        ├── api/                 # axios 封装 + 各模块接口
+        ├── api/                 # axios 封装 + 各模块接口（auth / materials / boms / orders / production / quality / sop / devices / auditLogs / inspectTypes / roles）
         ├── components/
-        │   └── AnnotationEditor.vue  # **独立的 Canvas 图片标注编辑器**（箭头/矩形/圆形/文字）
+        │   └── AnnotationEditor.vue  # 独立的 Canvas 图片标注编辑器（箭头/矩形/圆形/文字）
         ├── layouts/MainLayout.vue
-        ├── router/index.js
-        ├── stores/auth.js       # Pinia JWT 状态管理
+        ├── router/index.js       # 路由守卫 + Pinia 权限校验
+        ├── stores/auth.js       # Pinia JWT + 真实 RBAC 权限（从 /api/auth/me 获取）
         └── views/
-            ├── LoginView.vue        # 登录界面（注册已移至系统管理）
+            ├── LoginView.vue        # 登录界面
             ├── DashboardView.vue    # 运营看板
-            ├── MaterialView.vue     # 物料主数据
-            ├── BomView.vue          # BOM 清单
-            ├── inventory/           # 物料/消耗品/在制品管理中心
-            ├── orders/              # 生产工单 / 订单调整 / 订单监控
-            ├── QualityView.vue      # 质量检验
+            ├── MaterialView.vue     # 物料主数据（CRUD + CSV 导入）
+            ├── BomView.vue          # BOM 清单（CRUD + CSV 导入 + 齐套检查）
+            ├── WorkOrderView.vue    # 生产工单
+            ├── QualityView.vue      # 质量检验（检验类型动态加载）
+            ├── InspectTypeView.vue  # 检验类型字典（7 种分类 × 4 种抽样策略）
             ├── DefectCodeView.vue   # 不良代码字典
-            ├── SopView.vue          # SOP 作业指导（含**上传/标注/多类型媒体预览**）
+            ├── DeviceView.vue       # 设备直连骨架（OPC-UA / MQTT）
+            ├── SopView.vue          # SOP 作业指导（含上传/标注/多类型媒体预览）
             ├── TraceView.vue        # 批次追溯
-            └── system/              # 用户管理 / 角色授权 / 操作日志
+            ├── InventoryView.vue    # 库存总览
+            ├── inventory/           # 物料/消耗品/在制品管理中心
+            ├── orders/              # 订单生产 / 订单调整 / 订单监控
+            └── system/              # 用户管理 / 角色授权（RBAC 可编辑矩阵） / 操作日志（真实 API 接入）
 ```
 
 后端分层约定：`router`（参数校验 / 响应序列化）→ `service`（业务规则 / 状态机 / 事务）→ `repository`（SQL 与行级锁）→ `models`（ORM 表定义）；请求级会话由 `core.deps.get_db` 注入。业务模块之间不互相 import service，只通过 repository / session 解耦。
@@ -196,19 +203,42 @@ SOP 模块已扩展支持**图片/PDF/视频**三种媒体类型上传，以及�
 
 ## 验证
 
-后端 `openapi.json` 已注册 **50+ 条路径**（auth / orders / materials / boms / production / defect-codes / sops / dashboard）。
+后端 `openapi.json` 已注册 **70+ 条路径**（auth / users / roles / materials / boms / orders / production / inspections / defect-codes / sops / devices / audit-logs / dashboard / health）。
+
+**新增关键端点（近期实现）：**
+
+| 方法 | 路径 | 说明 |
+|---|---|---|
+| PUT / DELETE | `/api/materials/{id}` | 物料主数据编辑 / 删除（删除前校验无库存台账） |
+| POST | `/api/materials/import` | 物料 CSV 批量导入（幂等：已存在编码自动跳过） |
+| POST | `/api/boms/import` | BOM CSV 批量导入（自动关联物料编码、支持多版本） |
+| GET | `/api/boms/shortage/{bom_id}?qty=N` | BOM 齐套检查（需求展开 × 损耗率 × 订单量 vs 现有库存） |
+| GET | `/api/auth/roles` | 角色权限列表（从 DB + 硬编码种子初始化） |
+| GET | `/api/auth/permissions/catalog` | 可选权限清单（35 项） |
+| PUT | `/api/auth/roles/{role}/permissions` | 保存角色权限（全量替换、写时清缓存） |
+| GET | `/api/inspect-types` | 检验类型字典（7 种分类 × 4 种抽样策略） |
+| GET | `/api/devices` | 设备直连骨架（OPC-UA / MQTT 协议模板） |
+| GET | `/api/audit-logs` | 审计日志（关键操作自动记录） |
+
+**CSV 编码自动兼容：** UTF-8-sig（Excel 默认导出）→ GBK（兼容中文系统），UTF-8 直读。
 
 **在线文档自测** — 打开 `http://127.0.0.1:8000/docs`，按「鉴权 → 订单 → 物料 → 生产」顺序调用。最小验收路径：
 
 1. **鉴权**：`POST /api/auth/login` 拿 Token → `GET /api/auth/users` 查列表。
 2. **物料**：`POST /api/materials` 建成品 + 原料 → `POST /api/materials/inbound` 入库（带批次）。
-3. **订单**：`POST /api/orders` 建单 → `PUT /api/orders/{id}?version=1` 验证乐观锁 → `POST /api/orders/{id}/release` 生成工单并看缺料告警。
-4. **领料**：`POST /api/materials/issue`（不传批次验证 FIFO）→ `GET /api/materials/transactions` 看流水。
-5. **生产**：工单流转 `RELEASED` → `RUNNING` → `GET /{id}/operations` 看工序 → `POST /{id}/report` 逐工序报工（首道带 `materials`）→ 末道报满自动入成品仓。
-6. **质量**：`POST /api/defect-codes` 建不良代码 → `POST /api/production/inspections` 登记检验 → `GET /api/production/inspections/stats` 看统计。
-7. **SOP 动态**：`GET /api/sops/dynamic/GB-100` 拿到完整工艺路线 + BOM + 各工序内容。
-8. **SOP 上传 & 标注**：`POST /api/sops/upload` 上传图片 → 在 SopView 中使用 AnnotationEditor 标注 → `PUT /api/sops/{id}` 保存 annotations。
-9. **追溯**：`GET /api/production/trace/forward/{product_batch}`、`/backward/{material_batch}`、`/tree/{product_batch}`、`/bfs/{product_batch}?max_depth=4` 查四条路径。
+3. **物料 CSV 导入**：前端 MaterialView 点击「📥 CSV 导入」→ 上传模板文件 → 后端自动解析、幂等创建。
+4. **BOM CSV 导入**：前端 BomView 点击「📥 CSV 导入」→ 上传后自动关联物料编码。
+5. **BOM 齐套**：`GET /api/boms/shortage/{bom_id}?qty=10` 展开 BOM 算缺料明细。
+6. **订单**：`POST /api/orders` 建单 → `PUT /api/orders/{id}?version=1` 验证乐观锁 → `POST /api/orders/{id}/release` 生成工单并看缺料告警。
+7. **领料**：`POST /api/materials/issue`（不传批次验证 FIFO）→ `GET /api/materials/transactions` 看流水。
+8. **生产**：工单流转 `RELEASED` → `RUNNING` → `GET /{id}/operations` 看工序 → `POST /{id}/report` 逐工序报工（首道带 `materials`）→ 末道报满自动入成品仓。
+9. **质量**：`POST /api/defect-codes` 建不良代码 → `POST /api/production/inspections` 登记检验 → `GET /api/production/inspections/stats` 看统计。
+10. **检验类型**：`GET /api/inspect-types` 拿 7 种分类 + 4 种抽样策略 → QualityView 下拉动态加载。
+11. **SOP 动态**：`GET /api/sops/dynamic/GB-100` 拿到完整工艺路线 + BOM + 各工序内容。
+12. **SOP 上传 & 标注**：`POST /api/sops/upload` 上传图片 → 在 SopView 中使用 AnnotationEditor 标注 → `PUT /api/sops/{id}` 保存 annotations。
+13. **追溯**：`GET /api/production/trace/forward/{product_batch}`、`/backward/{material_batch}`、`/tree/{product_batch}`、`/bfs/{product_batch}?max_depth=4` 查四条路径。
+14. **RBAC 角色权限**：系统管理 → 角色授权 → 勾选权限矩阵 → 保存后权限立即生效（`require_perm` 实时查 DB）。
+15. **审计日志**：系统管理 → 操作日志 → 真实 API 接入，多条件过滤、分页。
 
 ---
 
@@ -216,6 +246,9 @@ SOP 模块已扩展支持**图片/PDF/视频**三种媒体类型上传，以及�
 
 | 文档 | 内容 |
 |---|---|
-| [SOG系统产品说明书.md](SOG系统产品说明书.md) | 产品定位、角色、功能地图与实现状态、业务规则与状态机、功能详述、系统架构、数据模型、ERP/MES/设备集成设计、非功能需求、部署运维、实施路径、验收用例、错误码与术语 |
-| `docker-compose.yml` | PostgreSQL 18 单机编排 |
-| `http://<host>:8000/docs` | 在线 OpenAPI 文档 |
+| [SOG系统产品说明书.md](SOG系统产品说明书.md) | 完整版：产品定位、角色、功能地图、业务规则、系统架构、数据模型、集成设计、验收用例 |
+| [SOG系统产品说明书_简约版.md](SOG系统产品说明书_简约版.md) | 对外客户版：核心痛点、功能亮点、技术架构、实施路径 |
+| [SOG前端功能说明书.md](SOG前端功能说明书.md) | 开发版：页面路由、组件结构、权限矩阵、API 模块对应关系 |
+| [build_ppt.py](ppt/build_ppt.py) | PPT 生成脚本（浅蓝色科技感主题，34 页，真实系统截图） |
+| [take_screenshots.py](ppt/take_screenshots.py) | Playwright 自动截图脚本（连接本地 Chrome，截取 22 张真实界面） |
+| `http://<host>:8000/docs` | 在线 OpenAPI 文档（70+ 接口） |

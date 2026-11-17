@@ -1,8 +1,12 @@
 <script setup>
-import { ref, reactive, onMounted } from 'vue'
+import { ref, reactive, onMounted, watch } from 'vue'
+import { useRoute } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { Upload, Download, Plus, RefreshRight } from '@element-plus/icons-vue'
 import { listOrders, createOrder, releaseOrder, transitionOrder, importOrders } from '@/api/orders'
+
+const props = defineProps({ focusRelease: Boolean })
+const route = useRoute()
 
 const rows = ref([])
 const loading = ref(false)
@@ -95,7 +99,12 @@ function autoReceive() {
   load()
 }
 
-onMounted(load)
+onMounted(() => {
+  if (props.focusRelease || route.name === 'order-release') {
+    statusFilter.value = 'DRAFT'
+  }
+  load()
+})
 </script>
 
 <template>

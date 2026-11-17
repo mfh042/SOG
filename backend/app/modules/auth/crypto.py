@@ -1,4 +1,4 @@
-﻿"""JWT + 密码哈希（纯标准库实现，无第三方依赖）。"""
+"""JWT + 密码哈希（纯标准库实现，无第三方依赖）。"""
 import base64
 import hashlib
 import hmac

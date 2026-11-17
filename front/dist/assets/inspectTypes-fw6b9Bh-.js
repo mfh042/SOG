@@ -1,0 +1,1 @@
+import{l as t}from"./index-teGgnORk.js";const c=e=>t.get("/api/inspect-types",{params:e}),a=e=>t.post("/api/inspect-types",e),n=(e,p)=>t.put(`/api/inspect-types/${e}`,p),i=e=>t.delete(`/api/inspect-types/${e}`);export{a as c,i as d,c as l,n as u};

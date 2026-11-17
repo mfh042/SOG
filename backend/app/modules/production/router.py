@@ -4,6 +4,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.common.enums import WorkOrderStatus
 from app.core.deps import Pagination, get_db, get_pagination
+from app.core.permissions import require_perm
 from app.core.response import PageData, Resp
 from app.modules.production.schemas import (
     InspectionIn,
@@ -34,6 +35,7 @@ def _wo(o) -> WorkOrderOut:
 async def create_wo(
     payload: WorkOrderCreate,
     operator: str = Header("system", alias="X-Operator"),
+    _: dict = Depends(require_perm("production:report")),
     session: AsyncSession = Depends(get_db),
 ):
     wo = await _svc(session, operator).create_wo(payload)
@@ -45,6 +47,7 @@ async def list_wo(
     status: str | None = Query(None, description="PLANNED/RELEASED/RUNNING/DONE/SCRAPPED"),
     product: str | None = Query(None, description="产品编码或名称模糊匹配"),
     page: Pagination = Depends(get_pagination),
+    _: dict = Depends(require_perm("production:read")),
     session: AsyncSession = Depends(get_db),
 ):
     rows, total = await _svc(session, "system").list_wo(status, product, page)
@@ -52,7 +55,11 @@ async def list_wo(
 
 
 @router.get("/work-orders/{wo_id}", response_model=Resp[WorkOrderOut], summary="工单详情")
-async def get_wo(wo_id: int, session: AsyncSession = Depends(get_db)):
+async def get_wo(
+    wo_id: int,
+    _: dict = Depends(require_perm("production:read")),
+    session: AsyncSession = Depends(get_db),
+):
     return Resp.ok(_wo(await _svc(session, "system").get_wo(wo_id)))
 
 
@@ -62,6 +69,7 @@ async def update_wo(
     payload: WorkOrderUpdate,
     version: int = Query(..., description="乐观锁版本号"),
     operator: str = Header("system", alias="X-Operator"),
+    _: dict = Depends(require_perm("production:report")),
     session: AsyncSession = Depends(get_db),
 ):
     return Resp.ok(_wo(await _svc(session, operator).update_wo(wo_id, payload, version)))
@@ -72,6 +80,7 @@ async def transition_wo(
     wo_id: int,
     target: WorkOrderStatus = Query(...),
     operator: str = Header("system", alias="X-Operator"),
+    _: dict = Depends(require_perm("production:transition")),
     session: AsyncSession = Depends(get_db),
 ):
     wo = await _svc(session, operator).transition(wo_id, target)
@@ -79,7 +88,11 @@ async def transition_wo(
 
 
 @router.get("/work-orders/{wo_id}/operations", response_model=Resp[list[OperationStep]], summary="工序进度")
-async def operations(wo_id: int, session: AsyncSession = Depends(get_db)):
+async def operations(
+    wo_id: int,
+    _: dict = Depends(require_perm("production:read")),
+    session: AsyncSession = Depends(get_db),
+):
     return Resp.ok(await _svc(session, "system").operations(wo_id))
 
 
@@ -88,6 +101,7 @@ async def report(
     wo_id: int,
     payload: ReportReq,
     operator: str = Header("system", alias="X-Operator"),
+    _: dict = Depends(require_perm("production:report")),
     session: AsyncSession = Depends(get_db),
 ):
     result = await _svc(session, operator).report(wo_id, payload)
@@ -103,6 +117,7 @@ async def scrap(
     wo_id: int,
     payload: ScrapReq,
     operator: str = Header("system", alias="X-Operator"),
+    _: dict = Depends(require_perm("production:report")),
     session: AsyncSession = Depends(get_db),
 ):
     return Resp.ok(_wo(await _svc(session, operator).scrap(wo_id, payload)), message="报废已登记")
@@ -112,6 +127,7 @@ async def scrap(
 async def progress(
     wo_id: int | None = Query(None),
     limit: int = Query(100, le=500),
+    _: dict = Depends(require_perm("production:read")),
     session: AsyncSession = Depends(get_db),
 ):
     rows = await _svc(session, "system").list_progress(wo_id, limit)
@@ -137,6 +153,7 @@ async def progress(
 async def create_inspection(
     payload: InspectionIn,
     operator: str = Header("system", alias="X-Operator"),
+    _: dict = Depends(require_perm("quality:create")),
     session: AsyncSession = Depends(get_db),
 ):
     q = await _svc(session, operator).add_inspection(payload)
@@ -156,6 +173,7 @@ async def list_inspection(
     wo_id: int | None = Query(None),
     product: str | None = Query(None),
     page: Pagination = Depends(get_pagination),
+    _: dict = Depends(require_perm("quality:read")),
     session: AsyncSession = Depends(get_db),
 ):
     rows, total = await _svc(session, "system").list_inspection(wo_id, product, page)
@@ -180,7 +198,10 @@ async def list_inspection(
 
 
 @router.get("/inspections/stats", summary="质量统计（合格率与缺陷 Top10）")
-async def inspection_stats(session: AsyncSession = Depends(get_db)):
+async def inspection_stats(
+    _: dict = Depends(require_perm("quality:read")),
+    session: AsyncSession = Depends(get_db),
+):
     return Resp.ok(await _svc(session, "system").quality_stats())
 
 
@@ -203,6 +224,7 @@ def _trace_out(r) -> TraceOut:
 async def trace(
     wo_id: int | None = Query(None),
     limit: int = Query(200, le=1000),
+    _: dict = Depends(require_perm("trace:read")),
     session: AsyncSession = Depends(get_db),
 ):
     rows = await _svc(session, "system").list_trace(wo_id, limit)
@@ -210,7 +232,11 @@ async def trace(
 
 
 @router.get("/trace/forward/{product_batch}", summary="正向追溯：成品批次 → 用料与工单")
-async def forward_trace(product_batch: str, session: AsyncSession = Depends(get_db)):
+async def forward_trace(
+    product_batch: str,
+    _: dict = Depends(require_perm("trace:read")),
+    session: AsyncSession = Depends(get_db),
+):
     rows = await _svc(session, "system").forward_trace(product_batch)
     return Resp.ok(
         {"product_batch": product_batch, "count": len(rows), "events": [_trace_out(r) for r in rows]}
@@ -218,7 +244,11 @@ async def forward_trace(product_batch: str, session: AsyncSession = Depends(get_
 
 
 @router.get("/trace/backward/{material_batch}", summary="反向追溯：原料批次 → 流向的成品")
-async def backward_trace(material_batch: str, session: AsyncSession = Depends(get_db)):
+async def backward_trace(
+    material_batch: str,
+    _: dict = Depends(require_perm("trace:read")),
+    session: AsyncSession = Depends(get_db),
+):
     rows = await _svc(session, "system").backward_trace(material_batch)
     return Resp.ok(
         {
@@ -230,7 +260,11 @@ async def backward_trace(material_batch: str, session: AsyncSession = Depends(ge
 
 
 @router.get("/trace/tree/{product_batch}", summary="追溯树：成品批次 → 工单 → 全部事件")
-async def trace_tree(product_batch: str, session: AsyncSession = Depends(get_db)):
+async def trace_tree(
+    product_batch: str,
+    _: dict = Depends(require_perm("trace:read")),
+    session: AsyncSession = Depends(get_db),
+):
     return Resp.ok(await _svc(session, "system").trace_tree(product_batch))
 
 
@@ -238,11 +272,15 @@ async def trace_tree(product_batch: str, session: AsyncSession = Depends(get_db)
 async def trace_bfs(
     product_batch: str,
     max_depth: int = Query(4, ge=1, le=10, description="BFS 最大层数"),
+    _: dict = Depends(require_perm("trace:read")),
     session: AsyncSession = Depends(get_db),
 ):
     return Resp.ok(await _svc(session, "system").trace_bfs(product_batch, max_depth))
 
 
 @router.get("/wip/summary", summary="WIP 在制品汇总看板：KPI + 工位分布 + 龄分析")
-async def wip_summary(session: AsyncSession = Depends(get_db)):
+async def wip_summary(
+    _: dict = Depends(require_perm("wip:read")),
+    session: AsyncSession = Depends(get_db),
+):
     return Resp.ok(await _svc(session, "system").wip_summary())

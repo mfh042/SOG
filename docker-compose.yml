@@ -1,10 +1,8 @@
-version: "3.9"
-
-# PostgreSQL 18 单机实例；首次启动自动执行 schema.sql 初始化。
 services:
   postgres:
     image: postgres:18-alpine
-    container_name: sog-postgres18
+    container_name: sog-postgres
+    restart: unless-stopped
     environment:
       POSTGRES_DB: sog
       POSTGRES_USER: sog
@@ -15,19 +13,95 @@ services:
     volumes:
       - pgdata:/var/lib/postgresql/data
       - ./backend/app/migrations/schema.sql:/docker-entrypoint-initdb.d/01_schema.sql:ro
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U sog -d sog"]
-      interval: 5s
-      timeout: 3s
-      retries: 10
-    # PG18 并发适配：连接数按实例规格调整
     command:
       - postgres
       - -c
       - max_connections=200
       - -c
       - shared_buffers=256MB
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U sog -d sog"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+      start_period: 5s
+    networks:
+      - sog-net
+
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: sog-backend
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      APP_ENV: prod
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_NAME: sog
+      DB_USER: sog
+      DB_PASSWORD: sog_pass
+      DB_POOL_SIZE: 20
+      DB_MAX_OVERFLOW: 30
+      CORS_ORIGINS: http://localhost,http://localhost:80,http://127.0.0.1
+      TZ: Asia/Shanghai
+    ports:
+      - "8000:8000"
+    volumes:
+      - uploads-data:/app/uploads
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:8000/health"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+      start_period: 20s
+    networks:
+      - sog-net
+
+  frontend:
+    build:
+      context: ./front
+      dockerfile: Dockerfile
+    container_name: sog-frontend
+    restart: unless-stopped
+    depends_on:
+      - backend
+    ports:
+      - "80:80"
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost/"]
+      interval: 10s
+      timeout: 3s
+      retries: 3
+    networks:
+      - sog-net
+
+  frontend-dev:
+    build:
+      context: ./front
+      dockerfile: Dockerfile.dev
+    container_name: sog-frontend-dev
+    restart: unless-stopped
+    profiles: ["dev"]
+    depends_on:
+      - backend
+    ports:
+      - "5173:5173"
+    volumes:
+      - ./front/src:/app/src:ro
+      - ./front/public:/app/public:ro
+    environment:
+      - NODE_ENV=development
+    networks:
+      - sog-net
 
 volumes:
   pgdata:
-#（注：内容由AI生成）
+  uploads-data:
+
+networks:
+  sog-net:
+    driver: bridge

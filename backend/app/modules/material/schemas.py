@@ -20,6 +20,15 @@ class MaterialOut(MaterialIn):
     status: str
 
 
+class MaterialUpdate(BaseModel):
+    name: str | None = Field(None, min_length=1, max_length=128)
+    type: str | None = None
+    spec: str | None = None
+    unit: str | None = None
+    safety_stock: Decimal | None = Field(None, ge=0)
+    attrs: dict[str, Any] | None = None
+
+
 class StockIn(BaseModel):
     material_id: int
     batch_no: str = Field(min_length=1)
@@ -35,6 +44,13 @@ class StockOpReq(BaseModel):
     qty: Decimal = Field(gt=0)
     ref_type: str | None = None
     ref_id: int | None = None
+    remark: str | None = None
+
+
+class StockAdjust(BaseModel):
+    inventory_id: int
+    physical_qty: Decimal = Field(ge=0)
+    reason: str = Field(min_length=1, max_length=64, description="SURPLUS/SHORT/DAMAGE/OTHER")
     remark: str | None = None
 
 

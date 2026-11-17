@@ -1,7 +1,7 @@
 <script setup>
 import { ref, onMounted, reactive } from 'vue'
 import { ElMessage } from 'element-plus'
-import { listBoms, createBom, updateBom, getBom, activateBom, bomShortage } from '@/api/boms'
+import { listBoms, createBom, updateBom, getBom, activateBom, bomShortage, importBoms } from '@/api/boms'
 
 const rows = ref([])
 const loading = ref(false)
@@ -92,6 +92,22 @@ async function openShortage(row) {
   } finally { shortageLoading.value = false }
 }
 
+const importLoading = ref(false)
+
+async function handleImport(file) {
+  importLoading.value = true
+  try {
+    const res = await importBoms(file.raw)
+    const { created = 0, updated = 0, failed = 0 } = res || {}
+    ElMessage.success(`导入完成：新增 ${created}，更新 ${updated}，失败 ${failed}`)
+    load()
+  } catch (e) {
+  } finally {
+    importLoading.value = false
+  }
+  return false
+}
+
 onMounted(load)
 </script>
 
@@ -100,6 +116,18 @@ onMounted(load)
     <div class="toolbar">
       <el-button type="primary" @click="openCreate">新建 BOM</el-button>
       <el-button @click="load">刷新</el-button>
+      <el-upload
+        :show-file-list="false"
+        accept=".csv"
+        :before-upload="handleImport"
+      >
+        <el-button :loading="importLoading">📥 CSV 导入</el-button>
+      </el-upload>
+      <a
+        href="data:text/csv;charset=utf-8,\uFEFFproduct_code,component_code,version,qty_per,loss_rate,seq%0AFG-001,RAM-001,V1,2.5,0.02,1"
+        download="bom_template.csv"
+        style="font-size: 12px; color: #409eff; margin-left: 8px"
+      >下载模板</a>
     </div>
 
     <el-table v-loading="loading" :data="rows" border>

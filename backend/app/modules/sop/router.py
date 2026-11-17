@@ -10,6 +10,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.deps import get_db
+from app.core.permissions import require_perm
 from app.core.response import Resp
 from app.modules.material.models import Material
 from app.modules.sop.models import SopTemplate
@@ -51,7 +52,10 @@ def _to_tpl(t) -> TemplateOut:
 
 
 @router.post("/upload", summary="上传 SOP 媒体文件")
-async def upload_file(file: UploadFile = File(...)):
+async def upload_file(
+    file: UploadFile = File(...),
+    _: dict = Depends(require_perm("sop:upload")),
+):
     _ensure_upload_dir()
     if not file.filename:
         raise HTTPException(400, "文件名不能为空")
@@ -76,7 +80,10 @@ async def upload_file(file: UploadFile = File(...)):
 
 
 @router.get("/files/{filename}", summary="下载/查看 SOP 媒体文件")
-async def get_file(filename: str):
+async def get_file(
+    filename: str,
+    _: dict = Depends(require_perm("sop:read")),
+):
     _ensure_upload_dir()
     fp = UPLOAD_DIR / filename
     if not fp.exists():
@@ -85,7 +92,11 @@ async def get_file(filename: str):
 
 
 @router.get("/dynamic/{product_code}", summary="动态 SOP — 完整工艺路线 + BOM 指引")
-async def dynamic_sop(product_code: str, session: AsyncSession = Depends(get_db)):
+async def dynamic_sop(
+    product_code: str,
+    _: dict = Depends(require_perm("sop:read")),
+    session: AsyncSession = Depends(get_db),
+):
     from app.modules.bom.models import Bom
     sops = await SopService(session).list_by_product(product_code, active_only=True)
 
@@ -135,7 +146,11 @@ async def dynamic_sop(product_code: str, session: AsyncSession = Depends(get_db)
 
 
 @router.post("", response_model=Resp[SopOut], summary="创建/发布 SOP")
-async def create_sop(payload: SopCreate, session: AsyncSession = Depends(get_db)):
+async def create_sop(
+    payload: SopCreate,
+    _: dict = Depends(require_perm("sop:create")),
+    session: AsyncSession = Depends(get_db),
+):
     return Resp.ok(_to_out(await SopService(session).create(payload)), message="SOP 已创建")
 
 
@@ -144,6 +159,7 @@ async def list_sops(
     product_code: str | None = Query(None),
     keyword: str | None = Query(None),
     active_only: bool = Query(True),
+    _: dict = Depends(require_perm("sop:read")),
     session: AsyncSession = Depends(get_db),
 ):
     if product_code:
@@ -154,7 +170,11 @@ async def list_sops(
 
 
 @router.get("/{sop_id}", response_model=Resp[SopOut], summary="SOP 详情")
-async def get_sop(sop_id: int, session: AsyncSession = Depends(get_db)):
+async def get_sop(
+    sop_id: int,
+    _: dict = Depends(require_perm("sop:read")),
+    session: AsyncSession = Depends(get_db),
+):
     return Resp.ok(_to_out(await SopService(session).get(sop_id)))
 
 
@@ -162,6 +182,7 @@ async def get_sop(sop_id: int, session: AsyncSession = Depends(get_db)):
 async def get_for_op(
     product_code: str,
     operation_seq: int,
+    _: dict = Depends(require_perm("sop:read")),
     session: AsyncSession = Depends(get_db),
 ):
     return Resp.ok(_to_out(await SopService(session).get_for_operation(product_code, operation_seq)))
@@ -171,13 +192,18 @@ async def get_for_op(
 async def update_sop(
     sop_id: int,
     payload: SopUpdate,
+    _: dict = Depends(require_perm("sop:update")),
     session: AsyncSession = Depends(get_db),
 ):
     return Resp.ok(_to_out(await SopService(session).update(sop_id, payload)), message="SOP 已更新")
 
 
 @router.delete("/{sop_id}", summary="停用 SOP")
-async def delete_sop(sop_id: int, session: AsyncSession = Depends(get_db)):
+async def delete_sop(
+    sop_id: int,
+    _: dict = Depends(require_perm("sop:delete")),
+    session: AsyncSession = Depends(get_db),
+):
     await SopService(session).delete(sop_id)
     return Resp.ok(message="已停用")
 
@@ -189,6 +215,7 @@ async def list_templates(
     category: str | None = Query(None),
     keyword: str | None = Query(None),
     active_only: bool = Query(True),
+    _: dict = Depends(require_perm("sop:read")),
     session: AsyncSession = Depends(get_db),
 ):
     stmt = select(SopTemplate)
@@ -206,7 +233,11 @@ async def list_templates(
 
 
 @router.get("/templates/{tpl_id}", response_model=Resp[TemplateOut], summary="模板详情")
-async def get_template(tpl_id: int, session: AsyncSession = Depends(get_db)):
+async def get_template(
+    tpl_id: int,
+    _: dict = Depends(require_perm("sop:read")),
+    session: AsyncSession = Depends(get_db),
+):
     t = await session.get(SopTemplate, tpl_id)
     if not t:
         raise HTTPException(404, "模板不存在")
@@ -214,7 +245,11 @@ async def get_template(tpl_id: int, session: AsyncSession = Depends(get_db)):
 
 
 @router.post("/templates", response_model=Resp[TemplateOut], summary="新建模板")
-async def create_template(payload: TemplateCreate, session: AsyncSession = Depends(get_db)):
+async def create_template(
+    payload: TemplateCreate,
+    _: dict = Depends(require_perm("sop:create")),
+    session: AsyncSession = Depends(get_db),
+):
     t = SopTemplate(**payload.model_dump())
     session.add(t)
     await session.commit()
@@ -226,6 +261,7 @@ async def create_template(payload: TemplateCreate, session: AsyncSession = Depen
 async def update_template(
     tpl_id: int,
     payload: TemplateUpdate,
+    _: dict = Depends(require_perm("sop:update")),
     session: AsyncSession = Depends(get_db),
 ):
     t = await session.get(SopTemplate, tpl_id)
@@ -239,7 +275,11 @@ async def update_template(
 
 
 @router.delete("/templates/{tpl_id}", summary="删除模板（内置模板仅停用）")
-async def delete_template(tpl_id: int, session: AsyncSession = Depends(get_db)):
+async def delete_template(
+    tpl_id: int,
+    _: dict = Depends(require_perm("sop:delete")),
+    session: AsyncSession = Depends(get_db),
+):
     t = await session.get(SopTemplate, tpl_id)
     if not t:
         raise HTTPException(404, "模板不存在")
@@ -256,6 +296,7 @@ async def delete_template(tpl_id: int, session: AsyncSession = Depends(get_db)):
 async def apply_template(
     tpl_id: int,
     payload: TemplateApplyIn,
+    _: dict = Depends(require_perm("sop:read")),
     session: AsyncSession = Depends(get_db),
 ):
     t = await session.get(SopTemplate, tpl_id)

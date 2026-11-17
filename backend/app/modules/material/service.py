@@ -12,7 +12,7 @@ from app.core.deps import Pagination
 from app.core.exceptions import ConflictException, NotFoundException
 from app.modules.material.models import Inventory, Material, StockTransaction
 from app.modules.material.repository import MaterialRepository
-from app.modules.material.schemas import MaterialIn, StockIn, StockOpReq
+from app.modules.material.schemas import MaterialIn, MaterialUpdate, StockAdjust, StockIn, StockOpReq
 
 
 class MaterialService:
@@ -36,8 +36,72 @@ class MaterialService:
             raise NotFoundException("物料不存在")
         return m
 
+    async def update_material(self, material_id: int, payload: MaterialUpdate) -> Material:
+        m = await self.repo.get_material(material_id)
+        if not m:
+            raise NotFoundException("物料不存在")
+        for field, value in payload.model_dump(exclude_unset=True).items():
+            setattr(m, field, value)
+        await self.session.commit()
+        await self.session.refresh(m)
+        return m
+
+    async def delete_material(self, material_id: int) -> None:
+        m = await self.repo.get_material(material_id)
+        if not m:
+            raise NotFoundException("物料不存在")
+        inv_count = (await self.session.execute(
+            select(Inventory.id).where(Inventory.material_id == material_id).limit(1)
+        )).first()
+        if inv_count:
+            raise ConflictException("该物料存在库存台账，无法删除")
+        await self.session.delete(m)
+        await self.session.commit()
+
     async def list_materials(self, mtype, keyword, page: Pagination):
         return await self.repo.list_materials(mtype, keyword, page)
+
+    async def import_materials(self, rows: list[dict]) -> dict:
+        created, skipped, failed = 0, 0, 0
+        errors: list[dict] = []
+        existing_codes = set()
+        existing_rows = (await self.session.execute(select(Material.code))).scalars().all()
+        existing_codes = set(existing_rows)
+
+        for idx, raw in enumerate(rows, start=2):
+            code = (raw.get("code") or "").strip()
+            if not code:
+                failed += 1
+                errors.append({"row": idx, "error": "code 不能为空"})
+                continue
+            if code in existing_codes:
+                skipped += 1
+                continue
+            try:
+                name = (raw.get("name") or code).strip()
+                mtype = (raw.get("type") or "RAW").strip().upper()
+                unit = (raw.get("unit") or "PCS").strip() or "PCS"
+                spec = (raw.get("spec") or "").strip() or None
+                safety = Decimal(str(raw.get("safety_stock") or 0))
+                status = (raw.get("status") or "ACTIVE").strip().upper()
+                m = Material(
+                    code=code,
+                    name=name,
+                    type=mtype,
+                    unit=unit,
+                    spec=spec,
+                    safety_stock=safety,
+                    status=status,
+                    attrs={},
+                )
+                self.session.add(m)
+                existing_codes.add(code)
+                created += 1
+            except Exception as e:
+                failed += 1
+                errors.append({"row": idx, "error": str(e)})
+        await self.session.commit()
+        return {"created": created, "skipped": skipped, "failed": failed, "errors": errors}
 
     # ---------- 库存 ----------
     async def inbound(self, payload: StockIn) -> Inventory:
@@ -98,6 +162,28 @@ class MaterialService:
             raise ConflictException(f"在手库存不足：需 {req.qty}，仅余 {inv.qty_on_hand}")
         inv.qty_on_hand -= req.qty
         await self._txn("SCRAP", req.qty, inv, req)
+        await self.session.commit()
+        return inv
+
+    async def adjust(self, payload: StockAdjust) -> Inventory:
+        """盘盈亏调整：以实物盘点数为基准，自动计算差额写入 IN/ADJ 或 OUT/ADJ。"""
+        inv = await self.session.get(Inventory, payload.inventory_id)
+        if inv is None:
+            raise NotFoundException("库存行不存在")
+        inv = await self.repo.lock_inventory(inv.material_id, inv.batch_no, inv.location)
+        if inv is None:
+            raise NotFoundException("库存行不存在")
+        diff = payload.physical_qty - inv.qty_on_hand
+        if diff == 0:
+            return inv
+        inv.qty_on_hand = payload.physical_qty
+        txn_type = "IN_ADJ" if diff > 0 else "OUT_ADJ"
+        await self._txn(
+            txn_type,
+            abs(diff),
+            inv,
+            remark=f"盘点调整({payload.reason}) {payload.remark or ''}".strip(),
+        )
         await self.session.commit()
         return inv
 

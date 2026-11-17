@@ -1,4 +1,4 @@
-﻿"""认证业务：注册、登录、Token 签发。"""
+"""认证业务：注册、登录、Token 签发。"""
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import settings
@@ -56,3 +56,28 @@ class AuthService:
 
     async def list_users(self):
         return await self.repo.list_all()
+
+    async def update_user(self, user_id: int, payload) -> AppUser:
+        u = await self.repo.get(user_id)
+        if not u:
+            raise UnauthorizedException("用户不存在")
+        if payload.display_name is not None:
+            u.display_name = payload.display_name
+        if payload.role is not None:
+            u.role = payload.role
+        if payload.station_code is not None:
+            u.station_code = payload.station_code
+        if payload.is_active is not None:
+            u.is_active = payload.is_active
+        if payload.password is not None:
+            u.password_hash = hash_password(payload.password)
+        await self.session.commit()
+        await self.session.refresh(u)
+        return u
+
+    async def delete_user(self, user_id: int) -> None:
+        u = await self.repo.get(user_id)
+        if not u:
+            raise UnauthorizedException("用户不存在")
+        u.is_active = False
+        await self.session.commit()

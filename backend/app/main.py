@@ -28,8 +28,10 @@ from app.core.response import Resp
 from app.modules.auth.crypto import hash_password
 from app.modules.auth.models import AppUser
 from app.modules.auth.router import router as auth_router
+from app.modules.audit.router import router as audit_router
 from app.modules.bom.router import router as bom_router
 from app.modules.dashboard.router import router as dashboard_router
+from app.modules.device.router import router as device_router
 from app.modules.material.models import Material
 from app.modules.material.router import router as material_router
 from app.modules.orders.models import OrderItem, SalesOrder
@@ -75,6 +77,23 @@ async def _init_db():
             _seed_sop_templates(session)
             await session.commit()
             logger.info("✓ SOP 模板种子已写入")
+
+        from app.modules.auth.models import RolePermission
+        perm_count = await session.scalar(select(RolePermission).limit(1))
+        if perm_count is None:
+            _seed_role_permissions(session)
+            await session.commit()
+            logger.info("✓ 角色权限种子已写入")
+
+
+def _seed_role_permissions(session):
+    from app.core.permissions import ROLE_PERMISSIONS
+    from app.modules.auth.models import RolePermission
+    for role, perms in ROLE_PERMISSIONS.items():
+        for p in perms:
+            if p == "*":
+                continue
+            session.add(RolePermission(role=role, permission=p))
 
 
 def _seed_users(session):
@@ -521,8 +540,10 @@ app.add_middleware(
 register_exception_handlers(app)
 
 app.include_router(auth_router)
+app.include_router(audit_router)
 app.include_router(bom_router)
 app.include_router(dashboard_router)
+app.include_router(device_router)
 app.include_router(quality_router)
 app.include_router(order_router)
 app.include_router(material_router)

@@ -414,12 +414,16 @@ class ProductionService:
             wo_id=payload.wo_id,
             product_code=payload.product_code,
             product_batch=payload.product_batch,
+            inspect_type=payload.inspect_type,
+            operation_seq=payload.operation_seq,
+            sample_qty=payload.sample_qty,
             inspect_item=payload.inspect_item,
             result=payload.result,
             defect_code=payload.defect_code,
             defect_desc=payload.defect_desc,
             defect_images=payload.defect_images,
             inspector=payload.inspector or self.operator,
+            judge=payload.judge,
             note=payload.note,
         )
         await self.repo.add_inspection(q)

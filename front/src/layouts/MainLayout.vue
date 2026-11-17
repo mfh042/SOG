@@ -12,62 +12,83 @@ const menus = computed(() => [
     label: '总览',
     icon: 'Monitor',
     key: 'overview',
+    perm: 'dashboard:read',
     items: [
-      { path: '/dashboard', label: '运营看板' },
+      { path: '/dashboard', label: '运营看板', perm: 'dashboard:read' },
     ],
   },
   {
     label: '系统管理',
     icon: 'Setting',
     key: 'system',
+    perm: 'material:read',
     items: [
-      { path: '/system/users', label: '用户管理' },
-      { path: '/system/roles', label: '角色授权' },
-      { path: '/system/logs', label: '操作日志' },
+      { path: '/system/users', label: '用户管理', perm: 'material:read' },
+      { path: '/system/roles', label: '角色授权', perm: 'material:read' },
+      { path: '/system/logs', label: '审计日志', perm: 'admin:audit' },
     ],
   },
   {
     label: '主数据管理',
     icon: 'Collection',
     key: 'master',
+    perm: 'material:read',
     items: [
-      { path: '/materials', label: '物料主数据' },
-      { path: '/boms', label: 'BOM 清单' },
+      { path: '/materials', label: '物料主数据', perm: 'material:read' },
+      { path: '/boms', label: 'BOM 清单', perm: 'bom:read' },
+      { path: '/inspect-types', label: '检验类型字典', perm: 'quality:read' },
+      { path: '/defect-codes', label: '不良代码字典', perm: 'defect:read' },
     ],
   },
   {
     label: '物资管理',
     icon: 'Box',
     key: 'material',
+    perm: 'inventory:all',
     items: [
-      { path: '/inventory/hub', label: '物料管理中心' },
-      { path: '/consumables/hub', label: '消耗品管理中心' },
-      { path: '/wip/hub', label: '在制品管理中心' },
+      { path: '/inventory/hub', label: '物料管理中心', perm: 'inventory:all' },
+      { path: '/consumables/hub', label: '消耗品管理中心', perm: 'inventory:all' },
+      { path: '/wip/hub', label: '在制品管理中心', perm: 'wip:read' },
+      { path: '/stock/txn', label: '批次与流水', perm: 'inventory:all' },
     ],
   },
   {
     label: '生产订单',
     icon: 'Document',
     key: 'order',
+    perm: 'orders:read',
     items: [
-      { path: '/orders/work', label: '生产工单' },
-      { path: '/orders/adjust', label: '订单调整' },
-      { path: '/orders/monitor', label: '进度监控' },
+      { path: '/orders/work', label: '生产工单', perm: 'orders:read' },
+      { path: '/orders/adjust', label: '订单调整', perm: 'orders:update' },
+      { path: '/orders/release', label: '生产发布', perm: 'orders:update' },
     ],
   },
   {
     label: '生产管理',
     icon: 'Operation',
     key: 'production',
+    perm: 'production:read',
     items: [
-      { path: '/work-orders', label: '生产工单' },
-      { path: '/quality', label: '质量检验' },
-      { path: '/defect-codes', label: '不良代码' },
-      { path: '/sops', label: 'SOP 作业指导' },
-      { path: '/trace', label: '批次追溯' },
+      { path: '/orders/monitor', label: '生产执行监控', perm: 'orders:read' },
+      { path: '/quality', label: '质量检验', perm: 'quality:read' },
+      { path: '/sops', label: 'SOP 作业指导', perm: 'sop:read' },
+      { path: '/trace', label: '批次追溯', perm: 'trace:read' },
     ],
   },
-])
+  {
+    label: '设备管理',
+    icon: 'Cpu',
+    key: 'device',
+    perm: 'device:read',
+    items: [
+      { path: '/devices', label: '设备直连', perm: 'device:read' },
+    ],
+  },
+].map(group => {
+  const filtered = group.items.filter(it => auth.hasPerm(it.perm))
+  if (filtered.length === 0) return null
+  return { ...group, items: filtered }
+}).filter(Boolean))
 
 function handleLogout() {
   auth.logout()

@@ -94,11 +94,15 @@ class InspectionIn(BaseModel):
     product_code: str | None = None
     product_batch: str | None = None
     inspect_item: str
+    inspect_type: str = Field("FQC", description="IQC/IPQC/PQC/FQC/OQC/SPQC")
+    operation_seq: int | None = None
+    sample_qty: int = Field(1, ge=1)
     result: str = Field(description="PASS/FAIL/REWORK")
     defect_code: str | None = None
     defect_desc: str | None = None
     defect_images: list[str] = []
     inspector: str | None = None
+    judge: str | None = None
     note: str | None = None
 
 

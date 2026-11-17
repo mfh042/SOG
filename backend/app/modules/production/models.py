@@ -5,6 +5,7 @@ from decimal import Decimal
 from sqlalchemy import (
     DateTime,
     ForeignKey,
+    Integer,
     Numeric,
     String,
     Text,
@@ -67,11 +68,15 @@ class QualityInspection(Base):
     product_code: Mapped[str | None] = mapped_column(String(64), index=True)
     product_batch: Mapped[str | None] = mapped_column(String(64), index=True, comment="成品批次")
     inspect_item: Mapped[str] = mapped_column(String(128), comment="检验项目")
+    inspect_type: Mapped[str] = mapped_column(String(32), default="FQC", index=True, comment="IQC/IPQC/PQC/FQC/OQC/SPQC")
+    operation_seq: Mapped[int | None] = mapped_column(Integer, index=True, comment="对应工序序号")
+    sample_qty: Mapped[int] = mapped_column(Integer, default=1)
     result: Mapped[str] = mapped_column(String(16), index=True, comment="PASS/FAIL/REWORK")
     defect_code: Mapped[str | None] = mapped_column(String(32), index=True, comment="不良代码")
     defect_desc: Mapped[str | None] = mapped_column(Text, comment="缺陷描述/处置指引")
     defect_images: Mapped[list] = mapped_column(JSONB, default=list, comment="不良图册/图片")
     inspector: Mapped[str] = mapped_column(String(64), default="system")
+    judge: Mapped[str | None] = mapped_column(String(64), comment="判定人")
     note: Mapped[str | None] = mapped_column(Text)
     inspected_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), index=True
