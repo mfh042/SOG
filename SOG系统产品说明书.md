@@ -2,9 +2,9 @@
 
 | 项目 | 内容 |
 |---|---|
-| 文档版本 | V2.1（P3-P6 补齐） |
-| 编制日期 | 2026-11-16 |
-| 对应系统版本 | sog-system 0.2.0（FastAPI + Vue 3 + PostgreSQL 18 · JWT + SOP + 不良代码 + BFS 追溯） |
+| 文档版本 | V2.2（SOP 媒体上传 + 图片标注 + 登录/注册分离） |
+| 编制日期 | 2026-11-17 |
+| 对应系统版本 | sog-system 0.3.0（FastAPI + Vue 3 + PostgreSQL 18 · JWT + SOP 媒体/标注 + BFS 追溯） |
 | 文档类型 | 产品说明书 / 技术方案（对外可交付） |
 | 状态标记 | ✅ 已实现并验证　◐ 部分实现　○ 规划中（本期未实现） |
 | 合并来源 | `architecture.md`、`SOG 离散装配生产作业支援系统技术方案.md`、`SOG系统产品说明书.md`（内容已全部并入本文） |
@@ -185,7 +185,132 @@ SOG 系统核心能力
 - **齐套（②）** 是决策中枢，只有它齐套通过，生产才被放行。
 - **生产（④）** 是执行主体，逐工序报工驱动库存由原料 → 在制 → 成品流转。
 - **质量（⑤）** 是守门环节，检验结果反向决定是否可入库、是否需返工。
-- **SOP（⑥）** 是作业依据，工位打开即看，保证「干得对」。
+### 3.0A 系统模块关系图（当前实现）
+
+以下 Mermaid 图展示 **后端 8 个业务模块 + 前端 25 个视图** 的调用与数据流关系。节点颜色区分层级：
+
+- 蓝色：前端视图（Vue 3 Pages）
+- 绿色：后端业务模块（FastAPI Router -> Service -> Repository）
+- 黄色：基础设施层（数据库 / 鉴权 / 静态文件）
+- 白色：跨模块数据流
+
+```mermaid
+flowchart TB
+  subgraph Frontend ["前端 (Vue 3 + Element Plus)"]
+    direction TB
+    Login["LoginView 登录"]
+    Dash["DashboardView 运营看板"]
+    User["UserView 用户管理"]
+    Bom["BomView BOM 清单"]
+    Mat["MaterialView 物料主数据"]
+    InvHub["InventoryHub 库存中心"]
+    WipHub["WipHub 在制品中心"]
+    WO["WorkOrderView 生产工单"]
+    OrderWork["OrderWorkView 订单生产"]
+    QC["QualityView 质量检验"]
+    Defect["DefectCodeView 不良代码字典"]
+    Sop["SopView + AnnotationEditor SOP+图片标注"]
+    Trace["TraceView 批次追溯"]
+    Role["RolesView 角色授权"]
+    Logs["LogsView 操作日志"]
+  end
+
+  subgraph Backend ["后端 (FastAPI - Python 3.12)"]
+    direction TB
+    Auth["auth JWT鉴权 纯标准库HS256+PBKDF2"]
+    BOM["bom BOM头/行CRUD"]
+    MatAPI["material 主数据/库存/FIFO"]
+    Orders["orders 订单-释放生成工单"]
+    Prod["production 工单/工序/报工/追溯"]
+    SOPAPI["sop SOP CRUD+媒体上传+模板"]
+    Quality["quality 检验登记/不良代码"]
+    DashAPI["dashboard KPI聚合/齐套告警"]
+  end
+
+  subgraph Infra ["基础设施层"]
+    DB["PostgreSQL 18 13表1视图 行锁+乐观锁"]
+    Upload["/uploads 静态文件挂载 SOP媒体存储"]
+  end
+
+  Login -- "POST /auth/login" --> Auth
+  Auth -- "get_current_user 依赖" --> Prod
+  Auth -- "get_current_user 依赖" --> Orders
+  Auth -- "get_current_user 依赖" --> MatAPI
+
+  User -- "GET/POST /auth/users" --> Auth
+  Role & Logs -- "系统管理" --> Auth
+
+  Dash -- "GET /dashboard/overview" --> DashAPI
+  DashAPI -- "聚合调用" --> MatAPI
+  DashAPI -- "聚合调用" --> Prod
+  DashAPI -- "聚合调用" --> Quality
+  DashAPI -- "聚合调用" --> Orders
+
+  Bom -- "GET/POST /boms" --> BOM
+  Mat -- "GET/POST /materials" --> MatAPI
+
+  InvHub -- "库存中心" --> MatAPI
+  WipHub -- "在制品中心" --> MatAPI
+  MatAPI -- "读写" --> DB
+
+  OrderWork -- "POST /orders/{id}/release" --> Orders
+  Orders -- "释放时生成工单" --> Prod
+  Orders -- "齐套检查" --> BOM
+  Orders -- "齐套检查" --> MatAPI
+
+  WO -- "GET /production/work-orders" --> Prod
+  Prod -- "状态流转/工序报工" --> DB
+  Prod -- "末道入库" --> MatAPI
+  Prod -- "报工写追溯" --> DB
+  Prod -- "动态SOP查询" --> SOPAPI
+  Prod -- "质量登记" --> Quality
+
+  QC -- "POST /production/inspections" --> Quality
+  Defect -- "GET/POST /defect-codes" --> Quality
+  Quality -- "写检验记录" --> DB
+
+  Sop -- "GET /api/sops" --> SOPAPI
+  Sop -- "POST /api/sops/upload" --> SOPAPI
+  SOPAPI -- "保存媒体文件" --> Upload
+  Sop -- "GET /uploads/sop/xxx.jpg" --> Upload
+  SOPAPI -- "读写" --> DB
+
+  Trace -- "GET /production/trace/*" --> Prod
+
+  subgraph DataFlow ["跨模块数据流"]
+    direction LR
+    DF1["订单释放 -> 工单"]
+    DF2["领料扣原料 -> 写流水"]
+    DF3["末道报工 -> 入库成品"]
+    DF4["报工 -> 追溯链"]
+    DF5["BOM 展开 -> 齐套检查"]
+  end
+
+  Orders -.-> DF1
+  DF1 -.-> Prod
+  Prod -.-> DF2
+  DF2 -.-> MatAPI
+  Prod -.-> DF3
+  DF3 -.-> MatAPI
+  Prod -.-> DF4
+  DF4 -.-> DB
+  Orders -.-> DF5
+  DF5 -.-> BOM
+```
+
+**模块间核心调用关系说明：**
+
+| 源模块 | 调用 | 目标模块 | 触发场景 |
+|---|---|---|---|
+| orders | 释放订单自动生成工单 | production | `POST /orders/{id}/release` |
+| orders | 齐套检查 | bom + material | 释放前判断能否开工 |
+| production | 末道报工自动入库 | material | 末工序报满自动走库存流水 |
+| production | 报工首道FIFO领料 | material | 首工序报工带 materials 自动选批 |
+| production | 逐工序取SOP | sop | 工位端调 /dynamic/{product_code} |
+| production | 每道写追溯链 | trace_record | 写 ISSUE/ASSEMBLE/INSPECT 事件 |
+| production | 末道后登记检验 | quality | 工位端直接 PASS/FAIL |
+| sop | 媒体上传存储 | /uploads | POST /sops/upload -> GET /uploads/xxx |
+| dashboard | 8路并行聚合 | material+production+quality+orders | 看板内 asyncio.gather |
 
 ### 3.1 当前代码实现范围（务必先读）
 
@@ -339,8 +464,8 @@ sequenceDiagram
 
 ### 5.1 登录与权限 ✅
 
-- 注册：`POST /api/auth/register`（username、display_name、password、role），校验用户名唯一，角色限 `ADMIN / MANAGER / OPERATOR`。
 - 登录：`POST /api/auth/login` 返回 `access_token`（HS256，120 min）、`token_type=bearer`、`expires_in`。
+- 用户注册：`POST /api/auth/register`（username、display_name、password、role），校验用户名唯一，角色限 `ADMIN / MANAGER / OPERATOR`。**前端 UI 的注册入口已移至系统管理 → 用户管理**（UserView.vue），登录页仅保留登录功能。
 - 鉴权依赖：`core/deps.get_current_user` 从 `Authorization: Bearer <token>` 解析 → 查库校验 `is_active` → 返回 `{user_id, role, username, display_name}`。
 - 密码哈希：`modules/auth/crypto.py` 纯标准库 `hashlib.pbkdf2_hmac('sha256', ..., 120000)` + `hmac.compare_digest` 安全比对，格式 `pbkdf2$120000$<salt_hex>$<hash_hex>`。
 - 未携带或 Token 无效返回 **401 `UNAUTHORIZED`**（`UnauthorizedException`）。
@@ -507,15 +632,112 @@ sequenceDiagram
 
 ### 5.8 SOP 作业指导 ✅
 
-- **内容模型**：`产品编码 + 工序序号 + 版本`，含 `title`（步骤标题）、`content`（正文/步骤描述）、`content_url`（图纸/视频 URL）、`version`（默认 V1）、`is_active`（激活版）。
-- **下发接口**：
-  - `GET /api/sops` — 按产品/关键词过滤、按产品+工序顺序返回全部激活 SOP
-  - `GET /api/sops/for-operation/{product_code}/{operation_seq}` — 工位直接查询某产品某工序的当前生效 SOP（**核心高频路径**）
-  - `POST /api/sops` — 发布新版时，自动停用同产品同工序的旧版（幂等升级，无人工切换）
-  - `PUT /api/sops/{id}` — 更新标题/内容/URL/版本
-  - `DELETE /api/sops/{id}` — 软停用（`is_active=false`）
-- **工位扫码即看**：前端按工单 `product_code` + 当前工序 `seq` 调用 `/for-operation`，直接拿到生效 SOP 无需前端再排序匹配。
-- 规划 ○：步骤/检查点结构化步骤表、扭矩/工装要求、阅读确认与改版提醒、SOP × 不良处置指引联动。
+#### 5.8.1 基础内容模型
+
+`产品编码 + 工序序号 + 版本`，含 `title`（步骤标题）、`content`（正文 Markdown/步骤描述）、`content_url`（外链图纸/视频 URL，兼容旧版）、`version`（默认 V1）、`is_active`（激活版）。
+
+#### 5.8.2 媒体上传（已实现）
+
+SOP 现已扩展支持图片、PDF、视频三类媒体文件的上传与预览：
+
+- **上传接口**：`POST /api/sops/upload`，multipart/form-data，自动识别文件类型
+- **支持类型**：
+  - 图片：JPG / PNG / GIF / WebP / BMP
+  - 文档：PDF
+  - 视频：MP4 / WebM / OGG / MOV
+- **限制**：单文件 ≤ 50MB，UUID 重命名存储到 `backend/uploads/sop/`
+- **返回**：`{"url": "/uploads/sop/{uuid}.{ext}", "media_type": "image|pdf|video", "filename": "...", "size": ...}`
+- **存储字段**：`sop.media_type`（image/pdf/video）、`sop.media_url`、`sop.annotations`（JSONB）
+- **静态服务**：后端挂载 `/uploads` 目录，前端通过 Vite 代理 `vite.config.js` -> `/uploads` -> `localhost:8000`
+
+#### 5.8.3 图片交互式标注（已实现）
+
+前端独立组件 `AnnotationEditor.vue` 提供基于 Canvas 2D 的图片标注能力：
+
+**工具能力：**
+| 工具 | 说明 |
+|---|---|
+| 箭头 | 在图片上绘制带箭头的指示线，标注重点方向 |
+| 矩形框 | 在图片上框选指定区域，标注尺寸/范围 |
+| 圆形 | 圈出特定点位（如螺栓孔、传感器位置） |
+| 文字 | 在图片任意位置添加文字说明 |
+
+**交互操作：**
+- 8 种预设颜色可选
+- 拖拽移动已有标注、角点调整矩形/圆形尺寸
+- 撤销/重做：Ctrl+Z 撤销、Ctrl+Shift+Z 重做
+- Delete 键删除选中标注
+- 鼠标滚轮缩放、拖拽平移
+
+**数据格式**（归一化坐标）：
+```json
+{
+  "shapes": [
+    {
+      "type": "arrow|rect|circle|text",
+      "x": 0.35, "y": 0.42,
+      "x2": 0.58, "y2": 0.67,
+      "color": "#ff4d4f",
+      "text": "拧紧此处 -> 25N·m"
+    }
+  ]
+}
+```
+使用 0-1 归一化坐标（相对图片宽高），确保不同尺寸图片下标注位置一致；Canvas 绘制时乘以 `devicePixelRatio` 适配 Retina 屏。
+
+#### 5.8.4 动态 SOP（已实现）
+
+`GET /api/sops/dynamic/{product_code}` 返回完整工艺路线 + BOM 指引的聚合视图，工位端一键获取：
+
+```json
+{
+  "product_code": "GB-100",
+  "product_name": "减速机 GB-100",
+  "routing_steps": [
+    {
+      "operation_seq": 10,
+      "operation_name": "外壳加工",
+      "title": "GB-100 减速机 -- 外壳 CNC 加工",
+      "content": "## 工序目标",
+      "media_type": "image",
+      "media_url": "/uploads/sop/xxx.jpg",
+      "annotations": { "shapes": [] },
+      "version": "V2"
+    }
+  ],
+  "bom_items": [
+    { "material_code": "R-001", "material_name": "轴承 6205-2RS", "qty_per": 2.0 }
+  ]
+}
+```
+
+前端 SopView.vue 按 `media_type` 选择不同预览器：
+- `image` -> 图片 + 右侧 AnnotationEditor 标注
+- `pdf` -> iframe 嵌入浏览器内置 PDF 阅读器
+- `video` -> HTML5 `<video>` 播放器
+
+#### 5.8.5 基础 CRUD 接口
+
+| 方法 | 路径 | 说明 |
+|---|---|---|
+| `GET /api/sops` | 列表 | 按 product_code / keyword 过滤、按产品+工序顺序返回全部激活 SOP |
+| `GET /api/sops/for-operation/{product_code}/{operation_seq}` | 工位高频查询 | 某产品某工序的当前生效 SOP |
+| `POST /api/sops` | 发布 | 新版发布时，自动停用同产品同工序的旧版（幂等升级） |
+| `PUT /api/sops/{id}` | 更新 | 标题/内容/URL/版本/媒体字段 |
+| `DELETE /api/sops/{id}` | 软停用 | `is_active=false` |
+
+#### 5.8.6 SOP 模板体系（已实现）
+
+系统内置 7 套 SOP 模板（`SopTemplate` 表），覆盖 CNC 机加工、热压装配、总成装配线、出厂检验、铸件后处理、绕线浸渍、通用七大场景。模板支持：
+
+- `GET /api/sops/templates/list` -- 按分类/关键词查询模板
+- `POST /api/sops/templates` -- 新建自定义模板
+- `PUT /api/sops/templates/{id}` / `DELETE /api/sops/templates/{id}` -- 更新/删除（内置模板仅停用）
+- `POST /api/sops/templates/{id}/apply` -- 应用模板，传入 product_code + operation_name + operation_seq，后端替换占位符返回预填充 SOP 字段
+
+#### 5.8.7 规划能力
+
+步骤/检查点结构化步骤表、扭矩/工装要求、阅读确认与改版提醒、SOP x 不良处置指引联动。
 
 ### 5.9 生产追溯 ✅
 
@@ -642,7 +864,7 @@ FastAPI 依赖在**响应返回后**才释放并 commit，会造成「A 请求�
 
 ## 7. 数据模型
 
-### 7.1 当前实现表清单（12 表 1 视图）
+### 7.1 当前实现表清单（13 表 1 视图）
 
 | 域 | 表 | 关键字段 / 说明 |
 |---|---|---|
@@ -656,7 +878,8 @@ FastAPI 依赖在**响应返回后**才释放并 commit，会造成「A 请求�
 | 生产 | `production_progress` | `wo_id`, `good_qty`, `bad_qty`, `station`, `operator`, `note`, `logged_at` |
 | 质量 | `quality_inspection` | `wo_id`, `product_code`, `inspect_item`, `result`(PASS/FAIL/REWORK), `defect_code`, `defect_desc`, `defect_images` JSONB, `inspector` |
 | 质量 | `defect_code` | `code`(唯一), `name`, `category`(CHECK), `severity`(MINOR/MAJOR/CRITICAL), `disposal_guide`, `is_active` |
-| SOP | `sop` | `product_code`, `operation_seq`, `operation_name`, `title`, `content`, `content_url`, `version`, `is_active`；唯一 `(product_code, operation_seq, is_active=true)` 部分索引 |
+| SOP | `sop` | `product_code`, `operation_seq`, `operation_name`, `title`, `content`, `content_url`, `version`, `is_active`, **`media_type`** (image/pdf/video), **`media_url`**, **`annotations`** JSONB（图片标注数据）；唯一 `(product_code, operation_seq, is_active=true)` 部分索引 |
+| SOP | `sop_template` | `name`, `category`, `description`, `title_template`, `content_template`（含 `{product}` / `{operation_name}` / `{seq}` 占位符）, `is_builtin`, `is_active`；系统内置 7 套 |
 | 追溯 | `trace_record` | `wo_id`, `product_batch`, `material_id`, `material_batch`, `event_type`, `qty`, `detail` JSONB |
 | 视图 | `v_inventory_available` | 可用量 = 在手 − 预留，联动物料安全库存 |
 
@@ -1370,8 +1593,22 @@ sequenceDiagram
 | GET | `/api/sops` | 列表（支持 product_code / keyword 过滤） |
 | GET | `/api/sops/{id}` | 详情 |
 | GET | `/api/sops/for-operation/{product_code}/{operation_seq}` | **工位高频路径**：某产品某工序的当前生效 SOP |
-| PUT | `/api/sops/{id}` | 更新 |
+| GET | `/api/sops/dynamic/{product_code}` | **动态 SOP**：完整工艺路线 + BOM 指引 + 多类型媒体（聚合视图） |
+| POST | `/api/sops/upload` | **媒体文件上传**（图片/PDF/视频 ≤50MB），返回 url + media_type + filename |
+| GET | `/api/sops/files/{filename}` | 下载/预览已上传的媒体文件（静态服务） |
+| PUT | `/api/sops/{id}` | 更新（标题/内容/URL/版本/media_url/annotations） |
 | DELETE | `/api/sops/{id}` | 软停用 |
+
+**SOP 模板子路径：**
+
+| 方法 | 路径 | 说明 |
+|---|---|---|
+| GET | `/api/sops/templates/list` | 模板列表（按 category / keyword 过滤） |
+| GET | `/api/sops/templates/{id}` | 模板详情 |
+| POST | `/api/sops/templates` | 新建自定义模板 |
+| PUT | `/api/sops/templates/{id}` | 更新模板（内置模板仅停用不删） |
+| DELETE | `/api/sops/templates/{id}` | 删除模板 |
+| POST | `/api/sops/templates/{id}/apply` | **应用模板**：传入 product_code + operation_name + operation_seq，返回预填充 SOP 字段 |
 
 ### A.8 看板 `/api/dashboard`
 
@@ -1391,3 +1628,190 @@ sequenceDiagram
 > 说明：工单**无 PUT 修改接口**（当前仅创建 + 状态流转 + 报工）；分页参数为 `page` / `size`（Pagination 类，单表列表）或 `limit`（≤500）；所有写端点显式 `await session.commit()` 保证写后读一致性；行锁均带 `of=Model` 防止 outer join 报错。
 >
 > 目标形态（○）为统一 `/api/v1` 前缀的 ~60 个接口，增补 stations、audit_logs、integration（ERP/MES）、equipment（PLC/拧紧）、sop_acknowledgements、defect_images 多图上传等；路径以 `openapi.json` 为准。
+
+---
+
+## 附录 B：产品快速使用指南（速查版）
+
+> 本附录为终端用户提供角色驱动的快速上手路径，覆盖系统已实现的全部核心功能。面向角色：计划员、操作工、质检员、管理员。
+
+### B.1 系统登录
+
+| 项 | 值 |
+|---|---|
+| 地址 | 前端启动后访问 http://localhost:5173 |
+| 演示账号 | admin / planner / operator / quality（密码见 README） |
+| 注册入口 | 已移至系统管理 / 用户管理，登录页不提供注册 |
+
+### B.2 角色与页面导航
+
+登录后左侧菜单栏按角色权限显示以下页面：
+
+| 菜单 | 页面 | 适用角色 | 核心操作 |
+|---|---|---|---|
+| 首页 | DashboardView | 全部 | 生产 KPI、齐套告警、工单进度 |
+| 物料 | MaterialView | 管理员/仓管 | 物料主数据 CRUD |
+| BOM | BomView | 管理员/计划员 | BOM 清单维护、版本切换 |
+| 库存 | InventoryHub | 仓管 | 入库 / 出库 / 盘点 / 库存查询 |
+| 在制品 | WipHub | 操作工 | 在制品查询与流转 |
+| 订单 | OrderWorkView | 计划员 | 创建销售订单 / 释放生成工单 |
+| 工单 | WorkOrderView | 计划员/操作工 | 工单状态流转、逐工序报工 |
+| 质量 | QualityView | 质检员 | 检验登记 PASS/FAIL/REWORK |
+| 不良代码 | DefectCodeView | 管理员/质检员 | 不良代码字典 CRUD |
+| SOP | SopView | 全部 | 查看 / 上传 / 标注 SOP 媒体文件 |
+| 追溯 | TraceView | 全部 | 成品批次正向 / 原料批次反向追溯 |
+| 系统管理 | UserView / RolesView | 管理员 | 用户 CRUD、角色授权、操作日志 |
+
+### B.3 计划员：从订单到工单（5 步）
+
+```mermaid
+flowchart LR
+  A[1. 创建销售订单<br/>含行项:产品/数量/交期] --> B[2. 释放订单<br/>系统自动:齐套检查+生成工单]
+  B --> C{齐套通过?}
+  C -->|否| C1[显示缺料清单<br/>通知补料]
+  C -->|是| D[3. 工单自动进入<br/>RELEASED 状态]
+  D --> E[操作工开工报工<br/>开始生产执行]
+```
+
+**操作路径：**
+1. 左侧菜单"订单" -> 新建 -> 填写订单行项（产品编码 GB-100，数量 50）
+2. 订单列表找到刚建的单 -> 点击"释放"
+3. 系统自动执行：BOM 展开 x 库存检查 -> 齐套通过则生成工单
+4. 跳转到"工单"页面，看到生成的工单状态为 RELEASED
+5. 如果齐套失败，在"首页"看到"齐套告警"列表，先补料再释放
+
+### B.4 操作工：工位报工（标准作业循环）
+
+```mermaid
+sequenceDiagram
+  participant Op as 操作工
+  participant SOP as SOP 页面
+  participant WO as 工单页面
+  participant Sys as 系统
+
+  Op->>WO: 选择当前工单 -> 点击开工
+  WO->>Sys: POST /production/work-orders/{id}/start
+  Sys-->>WO: 状态变为 RUNNING
+  Op->>SOP: 按 product_code 打开 SOP
+  SOP->>Sys: GET /api/sops/dynamic/{product_code}
+  Sys-->>SOP: 返回完整工艺路线 + BOM + 多类型媒体
+  Note over SOP: 按 media_type 自动预览<br/>image=图片+标注 / pdf=文档 / video=视频
+  loop 逐工序作业
+    Op->>WO: 点击当前工序报工<br/>首道工序须填领料
+    WO->>Sys: POST /production/work-orders/{id}/report
+    Sys->>Sys: 首道->FIFO领料扣原料+写追溯<br/>中间->仅写追溯事件<br/>末道->自动扣在制品+入成品仓
+    Sys-->>WO: 返回新完成数量
+  end
+  Op->>WO: 末道完成 -> 工单自动 COMPLETED
+```
+
+**关键点：**
+- 只有末道工序动成品库存（离散装配：领料一次，末道入库）
+- 首道工序报工带 materials 参数，系统自动 FIFO 选批次扣减
+- 报工重复提交会被 idempotency_key 拦截（幂等性保证）
+
+### B.5 质检员：检验登记
+
+1. 左侧菜单"质量" -> 新建检验
+2. 选择关联工单 + 工单已完成的末道工序
+3. 填写检验项（如外壳尺寸、焊接强度）
+4. 选择结果：PASS / FAIL / REWORK
+5. FAIL 时必须关联不良代码（从"不良代码"字典选择）
+6. 不良代码字典中每条含 disposal_guide（如"重新拧紧至 25N·m 并复检"）
+
+### B.6 SOP 维护与图片标注
+
+#### 上传流程
+
+1. 左侧菜单"SOP" -> 新建 SOP
+2. 填写：产品编码 / 工序序号 / 工序名称 / 标题
+3. 点击"上传媒体" -> 选择文件（图片/PDF/视频，<=50MB）
+4. 系统自动识别类型：image / pdf / video
+5. 保存 SOP
+
+#### 图片标注（仅 media_type=image 时可用）
+
+上传图片后，右侧出现 AnnotationEditor 标注面板：
+
+| 步骤 | 操作 | 快捷键 |
+|---|---|---|
+| 1 | 选工具：顶部工具栏 箭头 / 矩形 / 圆形 / 文字 | - |
+| 2 | 选颜色：8 种预设色板 | - |
+| 3 | 绘制：在图片上按住鼠标拖拽 | - |
+| 4 | 调整：选中标注后拖拽移动 / 拖角点改大小 | - |
+| 5 | 撤销/重做 | Ctrl+Z / Ctrl+Shift+Z |
+| 6 | 删除选中标注 | Delete |
+| 7 | 保存：点击保存按钮写入数据库 | - |
+
+> 标注坐标为归一化坐标（0~1），不同尺寸图片下位置一致。
+
+#### SOP 模板（一键填充）
+
+系统内置 7 套模板（CNC 机加工 / 热压装配 / 总成装配线 / 出厂检验 / 铸件后处理 / 绕线浸渍 / 通用）：
+
+1. 新建 SOP 时点击"应用模板"
+2. 选择模板 -> 系统预填充 title / content 字段
+3. 修改后保存，无需从头编写
+
+### B.7 追溯查询
+
+| 追溯方向 | 路径 | 输入 | 输出 | 典型场景 |
+|---|---|---|---|---|
+| 正向 | TraceView / 正向追溯 | 成品批次号 | 工单 + 消耗的所有原料批次 | 这个成品用了哪些原料？ |
+| 反向 | TraceView / 反向追溯 | 原料批次号 | 所有使用此原料的成品批次 | 这批原料影响了哪些成品？ |
+| 树形 | TraceView / 追溯树 | 成品批次号 | 完整 BFS 展开树（含深度） | 客诉时快速定位全链路 |
+| BFS 限制 | TraceView / BFS 追溯 | 成品批次号 + max_depth | 控制深度的展开 | 大批次限深度防爆 |
+
+### B.8 快捷 API 测试（curl）
+
+```bash
+# 1. 登录
+curl -X POST http://127.0.0.1:8000/api/auth/login \
+  -H "Content-Type: application/json" \
+  -d '{"username":"admin","password":"admin123"}'
+
+# 2. 创建物料
+curl -X POST http://127.0.0.1:8000/api/materials \
+  -H "Authorization: Bearer <token>" \
+  -H "Content-Type: application/json" \
+  -d '{"code":"R-001","name":"轴承 6205-2RS","type":"RAW","spec":"25x52x15","unit":"个"}'
+
+# 3. 物料入库（带批次）
+curl -X POST http://127.0.0.1:8000/api/materials/inbound \
+  -H "Authorization: Bearer <token>" \
+  -H "Content-Type: application/json" \
+  -d '{"material_id":1,"qty":200,"batch_no":"BATCH-20261117-001","location":"WH-RAW-01"}'
+
+# 4. 创建订单并释放
+curl -X POST http://127.0.0.1:8000/api/orders \
+  -H "Authorization: Bearer <token>" \
+  -H "Content-Type: application/json" \
+  -d '{"customer_name":"测试客户","priority":3,"planned_date":"2026-11-20","items":[{"material_code":"GB-100","material_name":"减速机","qty":50}]}'
+
+curl -X POST http://127.0.0.1:8000/api/orders/{id}/release \
+  -H "Authorization: Bearer <token>"
+
+# 5. 上传 SOP 媒体文件
+curl -X POST http://127.0.0.1:8000/api/sops/upload \
+  -H "Authorization: Bearer <token>" \
+  -F "file=@/path/to/drawing.jpg"
+
+# 6. 查看动态 SOP
+curl http://127.0.0.1:8000/api/sops/dynamic/GB-100 \
+  -H "Authorization: Bearer <token>"
+
+# 7. 批次追溯
+curl http://127.0.0.1:8000/api/production/trace/forward/FG-WO-xxx-20261117 \
+  -H "Authorization: Bearer <token>"
+```
+
+### B.9 常见问题速查
+
+| 问题 | 原因 | 解决 |
+|---|---|---|
+| 后端启动报 Psycopg ProactorEventLoop 错误 | Windows 上 uvicorn 默认 Proactor 与 psycopg3 不兼容 | 运行 `uv run python run.py` 或 `uvicorn --loop selector` |
+| 上传图片返回 404 | main.py 和 router.py 上传路径不一致 | 确认 main.py 挂载 /uploads 指向 backend/uploads |
+| 工单报工"可用库存不足" | 行锁并发冲突，前一个请求已扣完 | 等待库存补齐或调整数量 |
+| SOP 旧版看不到 | 新版发布自动 is_active=false 停用旧版 | 用 `GET /api/sops?include_inactive=true` 查询 |
+| 追溯查询结果为空 | 批次号拼写错误或工单未报工 | 从工单详情确认 product_batch / material_batch |
+| 齐套检查失败 | BOM 中某物料库存不足 | 在首页齐套告警查看缺料清单，补料后再释放 |

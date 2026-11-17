@@ -1,4 +1,4 @@
-# SOG · 离散装配生产作业支援系统
+# SOG · 离散装配生产作业支援系统（DELV-SOG）
 
 面向**离散型制造装配车间**的现场作业支援（SOG，Standard Operation Guidance）系统，定位为 MOM 体系中与 MES 配套的「生产作业支援子系统」。
 
@@ -16,31 +16,47 @@ dev/
 ├── SOG系统产品说明书.md          # 产品说明书 / 技术方案（完整版）
 ├── docker-compose.yml           # 容器编排（PG18 + 后端 + Nginx）
 ├── backend/                     # FastAPI 后端
+│   ├── run.py                   # Windows 启动脚本（自动启用 SelectorEventLoop）
 │   ├── pyproject.toml
 │   ├── .env.example             # 环境配置（连接池 / 线程 / 并发 / 跨域）
+│   ├── uploads/sop/             # SOP 媒体文件存储（自动创建）
 │   ├── smoke_test.py            # 接口层端到端冒烟测试
 │   └── app/
-│       ├── main.py              # FastAPI 入口、CORS、异常处理、/health
+│       ├── main.py              # FastAPI 入口、CORS、异常处理、/health、静态文件挂载
 │       ├── core/                # 基础设施层（config / db / deps / concurrency / response / exceptions）
 │       ├── common/              # 枚举、分页、基类
 │       ├── modules/             # 业务模块（router → service → repository → models → schemas）
 │       │   ├── auth/            # JWT 鉴权（纯标准库 HS256 + PBKDF2 密码哈希）
-│       │   ├── orders/          # 订单管理（含释放生成工单）
+│       │   ├── orders/          # 订单管理（含释放生成工单、CSV 批量导入）
 │       │   ├── material/        # 物料管控（主数据 / 库存 / 流水 / FIFO）
 │       │   ├── bom/             # BOM 头/行 CRUD + 激活版本切换
 │       │   ├── production/      # 生产管理（工单 / 工序 / 报工 / 追溯 / BFS 树形）
 │       │   ├── quality/         # 不良代码独立字典（code/name/category/severity/disposal_guide）
-│       │   ├── sop/             # SOP 作业指导（产品+工序+版本，新版自动停用旧版）
+│       │   ├── sop/             # SOP 作业指导（产品+工序+版本 + **媒体上传 + 图片标注**）
 │       │   ├── dashboard/       # 看板聚合（概览 KPI / 齐套告警）
-│       │   └── migrations/schema.sql # PostgreSQL 18 DDL（幂等，12 表 1 视图）
+│       │   └── migrations/schema.sql # PostgreSQL 18 DDL（幂等）
 └── front/                       # Vue 3 前端（Vite）
     ├── package.json
-    ├── vite.config.js           # /api 代理到后端
+    ├── vite.config.js           # /api 和 /uploads 代理到后端
     └── src/
-        ├── api/                 # request、orders、materials、production
+        ├── api/                 # axios 封装 + 各模块接口
+        ├── components/
+        │   └── AnnotationEditor.vue  # **独立的 Canvas 图片标注编辑器**（箭头/矩形/圆形/文字）
         ├── layouts/MainLayout.vue
-        ├── router/index.js      # orders / materials / inventory / work-orders / quality / trace
-        └── views/               # OrderView / MaterialView / InventoryView / WorkOrderView / QualityView / TraceView
+        ├── router/index.js
+        ├── stores/auth.js       # Pinia JWT 状态管理
+        └── views/
+            ├── LoginView.vue        # 登录界面（注册已移至系统管理）
+            ├── DashboardView.vue    # 运营看板
+            ├── MaterialView.vue     # 物料主数据
+            ├── BomView.vue          # BOM 清单
+            ├── inventory/           # 物料/消耗品/在制品管理中心
+            ├── orders/              # 生产工单 / 订单调整 / 订单监控
+            ├── QualityView.vue      # 质量检验
+            ├── DefectCodeView.vue   # 不良代码字典
+            ├── SopView.vue          # SOP 作业指导（含**上传/标注/多类型媒体预览**）
+            ├── TraceView.vue        # 批次追溯
+            └── system/              # 用户管理 / 角色授权 / 操作日志
 ```
 
 后端分层约定：`router`（参数校验 / 响应序列化）→ `service`（业务规则 / 状态机 / 事务）→ `repository`（SQL 与行级锁）→ `models`（ORM 表定义）；请求级会话由 `core.deps.get_db` 注入。业务模块之间不互相 import service，只通过 repository / session 解耦。
@@ -58,21 +74,11 @@ sudo apt install -y postgresql-18 && sudo pg_ctlcluster 18 main start
 # 方式二：容器
 docker compose up -d postgres
 
-sudo -u postgres psql -c "CREATE ROLE sog LOGIN PASSWORD 'sog123456';"
+sudo -u postgres psql -c "CREATE ROLE sog LOGIN PASSWORD 'sog_pass';"
 sudo -u postgres psql -c "CREATE DATABASE sog OWNER sog;"
 ```
 
-建表（幂等 `CREATE TABLE IF NOT EXISTS`）：
-
-```bash
-psql -h 127.0.0.1 -U sog -d sog -f backend/app/migrations/schema.sql
-```
-
-重置 schema：
-
-```bash
-psql -h 127.0.0.1 -U sog -d sog -c "DROP SCHEMA public CASCADE; CREATE SCHEMA public;"
-```
+后端首次启动会**自动建表 + 写入种子数据**（4 个演示用户、6 个物料、12 个 SOP、7 个 SOP 模板），无需手动执行 DDL。
 
 ### 2. 后端
 
@@ -80,11 +86,19 @@ psql -h 127.0.0.1 -U sog -d sog -c "DROP SCHEMA public CASCADE; CREATE SCHEMA pu
 cd backend
 cp .env.example .env                    # 按实际修改 DB 账号密码
 uv sync                                 # 安装依赖（Python 3.11~3.12）
+
+# macOS / Linux
 uv run uvicorn app.main:app --host 0.0.0.0 --port 8000
+
+# Windows（psycopg 需要 SelectorEventLoop）
+uv run python run.py
+# 或手动指定 loop：uv run uvicorn app.main:app --loop selector --host 0.0.0.0 --port 8000
 
 # 健康检查：GET http://127.0.0.1:8000/health
 # 接口文档：http://127.0.0.1:8000/docs
 ```
+
+> ⚠️ **Windows 注意**：psycopg3 异步驱动不能用 ProactorEventLoop，必须用 `--loop selector` 或 `run.py`。
 
 高并发部署（多核）：
 
@@ -94,12 +108,12 @@ gunicorn -k uvicorn.workers.UvicornWorker -w 4 app.main:app   # worker 数 ≈ C
 
 ### 3. 前端（Vue 3 + Vite）
 
-前端工程位于 `front/`，`vite.config.js` 将 `/api` 代理到后端（开发模式 5173，生产构建 `dist/` 可由 Nginx 或后端静态托管）：
+前端工程位于 `front/`，`vite.config.js` 将 `/api` 和 `/uploads` 代理到后端：
 
 ```bash
 cd front
 npm install
-npm run dev      # http://127.0.0.1:5173
+npm run dev      # http://127.0.0.1:5173  （或 5174 若 5173 被占用）
 npm run build    # 产物 dist/
 ```
 
@@ -122,20 +136,16 @@ docker compose up -d --build
 | `ASYNC_CONCURRENCY` | `32` | 异步协程并发信号量上限 |
 | `CORS_ORIGINS` | `http://localhost:5173,…` | 允许的前端来源（逗号分隔） |
 | `REDIS_URL` | 空 | 预留：缓存 / 消息队列，留空不启用 |
+| `SOP_UPLOAD_DIR` | `backend/uploads` | SOP 媒体文件存储根目录 |
 | `JWT_SECRET` | `change-me-in-production-please` | JWT 签名密钥，**生产必须更换**（32+ 字符随机串） |
 | `JWT_ALGORITHM` | `HS256` | 签名算法 |
 | `JWT_ACCESS_EXPIRE_MINUTES` | `120` | Access Token 有效期（分钟） |
 
-### 6. 鉴权（JWT，纯标准库）
+### 6. 鉴权（JWT）
 
-系统已落地 **JWT Bearer 鉴权**，使用 Python 标准库 `hmac` + `hashlib` + `base64` 实现（**无 PyJWT 依赖**），密码哈希用 **PBKDF2-HMAC-SHA256（120 次迭代）**。
+系统已落地 **JWT Bearer 鉴权**，密码哈希使用 **PBKDF2-HMAC-SHA256**。
 
 ```bash
-# 注册（首次使用）
-curl -X POST http://127.0.0.1:8000/api/auth/register \
-  -H "Content-Type: application/json" \
-  -d '{"username":"admin","display_name":"系统管理员","password":"admin123","role":"ADMIN"}'
-
 # 登录 → 获取 Token
 curl -X POST http://127.0.0.1:8000/api/auth/login \
   -H "Content-Type: application/json" \
@@ -146,54 +156,59 @@ curl -X POST http://127.0.0.1:8000/api/auth/login \
 curl -H "Authorization: Bearer eyJhbGciOi..." http://127.0.0.1:8000/api/production/work-orders
 ```
 
-`Authorization: Bearer <token>` 缺失或无效时返回 **401 `UNAUTHORIZED`**。`X-Operator` 请求头保留为兼容旧客户端的 fallback（未启用 JWT 鉴权的写端点仍可使用）。
-
-> 生产环境**必须更换 `JWT_SECRET`**（32+ 字符随机串，可用 `openssl rand -hex 32` 生成），并在 `.env` 中覆盖默认值。
-
-### 7. 快速体验（非鉴权路径，旧客户端兼容）
-
-不启用 JWT 也可直接调接口，操作人通过 `X-Operator` 请求头透传：
-
-```bash
-curl -H "X-Operator: operator" http://127.0.0.1:8000/api/production/work-orders
-```
-
-前端演示账号（JWT 登录用）：
+**前端演示账号：**
 
 | 账号 | 密码 | 角色 |
 |---|---|---|
 | admin | admin123 | 管理员 |
 | planner | planner123 | 计划员 |
-| operator | op123 | 操作工（ST-01） |
+| operator | op123 | 操作工 |
 | quality | qc123 | 质检员 |
+
+> 用户注册入口已移至 **系统管理 → 用户管理**（前端界面），登录页仅保留登录功能。
+
+---
+
+## SOP 媒体上传与图片标注（最新）
+
+SOP 模块已扩展支持**图片/PDF/视频**三种媒体类型上传，以及在图片上进行**交互式标注**：
+
+### 后端接口
+
+| 方法 | 路径 | 说明 |
+|---|---|---|
+| POST | `/api/sops/upload` | 上传媒体文件（JPG/PNG/GIF/WebP/BMP / PDF / MP4/WebM/OGG/MOV，≤50MB），返回 `url` + `media_type` |
+| GET | `/api/sops/files/{filename}` | 下载/预览已上传文件 |
+| GET | `/api/sops/dynamic/{product_code}` | **动态 SOP**：完整工艺路线（含 BOM 指引 + 多类型媒体） |
+
+新增字段（`sop` 表）：`media_type`（image/pdf/video）、`media_url`、`annotations`（JSONB 存储标注数据）。
+
+### 前端 AnnotationEditor 组件
+
+- **4 种标注工具**：箭头 → 、矩形框 ⬜、圆形 ⭕、文字 T
+- **8 种颜色可选**
+- **拖拽移动 / 角点调整大小**
+- **撤销/重做**（Ctrl+Z / Ctrl+Shift+Z）、Delete 删除
+- **归一化坐标存储**，不同尺寸图片标注位置一致
+- **适配 Retina 屏**（devicePixelRatio）
 
 ---
 
 ## 验证
 
-当前仓库提供 `backend/smoke_test.py`（**接口层端到端冒烟，35 项全通过**），后端 `openapi.json` 已注册 **48 条路径**（auth / orders / materials / boms / production / defect-codes / sops / dashboard）。
+后端 `openapi.json` 已注册 **50+ 条路径**（auth / orders / materials / boms / production / defect-codes / sops / dashboard）。
 
-**方式一：冒烟脚本**（推荐，仅依赖标准库 `urllib`）
+**在线文档自测** — 打开 `http://127.0.0.1:8000/docs`，按「鉴权 → 订单 → 物料 → 生产」顺序调用。最小验收路径：
 
-```bash
-cd backend
-.venv\Scripts\python.exe smoke_test.py     # Windows
-# 覆盖链路：物料建档 → 入库 → 建单 → 释放 → 工单流转 → 逐工序报工（含领料）
-#           → 报废 → 末道入库 → 检验 → 质量统计 → 正反向追溯 → 追溯树 → BFS 追溯 → 幂等/超产校验
-```
-
-**方式二：在线文档自测** — 打开 `http://127.0.0.1:8000/docs`，按「鉴权 → 订单 → 物料 → 生产」顺序调用。最小验收路径：
-
-1. **鉴权**：`POST /api/auth/register` → `POST /api/auth/login` 拿 Token → `GET /api/auth/users` 查列表。
+1. **鉴权**：`POST /api/auth/login` 拿 Token → `GET /api/auth/users` 查列表。
 2. **物料**：`POST /api/materials` 建成品 + 原料 → `POST /api/materials/inbound` 入库（带批次）。
 3. **订单**：`POST /api/orders` 建单 → `PUT /api/orders/{id}?version=1` 验证乐观锁 → `POST /api/orders/{id}/release` 生成工单并看缺料告警。
 4. **领料**：`POST /api/materials/issue`（不传批次验证 FIFO）→ `GET /api/materials/transactions` 看流水。
 5. **生产**：工单流转 `RELEASED` → `RUNNING` → `GET /{id}/operations` 看工序 → `POST /{id}/report` 逐工序报工（首道带 `materials`）→ 末道报满自动入成品仓。
-6. **质量**：`POST /api/defect-codes` 建不良代码（category/severity/disposal_guide）→ `POST /api/production/inspections` 登记检验 → `GET /api/production/inspections/stats` 看统计。
-7. **SOP**：`POST /api/sops` 发布产品工序 SOP → `POST /api/sops` 再发布新版自动停用旧版 → `GET /api/sops/for-operation/{product_code}/{operation_seq}` 工位高频查询。
-8. **追溯**：`GET /api/production/trace/forward/{product_batch}`、`/backward/{material_batch}`、`/tree/{product_batch}`、`/bfs/{product_batch}?max_depth=4` 查四条路径。
-
-并发验证建议：在手 100 的批次上并发 20 次各领 10，应只有 10 次成功，其余报「可用库存不足」，且在手量不为负（行锁生效）。
+6. **质量**：`POST /api/defect-codes` 建不良代码 → `POST /api/production/inspections` 登记检验 → `GET /api/production/inspections/stats` 看统计。
+7. **SOP 动态**：`GET /api/sops/dynamic/GB-100` 拿到完整工艺路线 + BOM + 各工序内容。
+8. **SOP 上传 & 标注**：`POST /api/sops/upload` 上传图片 → 在 SopView 中使用 AnnotationEditor 标注 → `PUT /api/sops/{id}` 保存 annotations。
+9. **追溯**：`GET /api/production/trace/forward/{product_batch}`、`/backward/{material_batch}`、`/tree/{product_batch}`、`/bfs/{product_batch}?max_depth=4` 查四条路径。
 
 ---
 
@@ -202,7 +217,5 @@ cd backend
 | 文档 | 内容 |
 |---|---|
 | [SOG系统产品说明书.md](SOG系统产品说明书.md) | 产品定位、角色、功能地图与实现状态、业务规则与状态机、功能详述、系统架构、数据模型、ERP/MES/设备集成设计、非功能需求、部署运维、实施路径、验收用例、错误码与术语 |
-| `docker-compose.yml` | PostgreSQL 18 单机编排，首启自动执行 `schema.sql` |
+| `docker-compose.yml` | PostgreSQL 18 单机编排 |
 | `http://<host>:8000/docs` | 在线 OpenAPI 文档 |
-
-> （注：部分内容由豆包 AI 生成）

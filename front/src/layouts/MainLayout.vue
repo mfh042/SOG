@@ -83,7 +83,7 @@ function handleLogout() {
 
       <div class="logo">
         <div class="logo-mark">
-          <img src="/logo.svg" alt="SOG" class="logo-img" />
+          <img src="/logo.jpg" alt="SOG" class="logo-img" />
         </div>
         <div class="logo-text-group">
           <div class="logo-text">生产作业支援系统</div>
@@ -233,10 +233,13 @@ function handleLogout() {
   width: 42px; height: 42px;
   border-radius: 10px;
   display: flex; align-items: center; justify-content: center;
+  overflow: hidden;
 }
 .logo-img {
-  width: 38px; height: 38px;
-  filter: drop-shadow(0 2px 8px rgba(249, 115, 22, 0.3));
+  width: 40px; height: 40px;
+  object-fit: contain;
+  border-radius: 8px;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.3);
   animation: logoFloat 4s ease-in-out infinite;
 }
 @keyframes logoFloat {

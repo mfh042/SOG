@@ -8,33 +8,18 @@ const router = useRouter()
 const route = useRoute()
 const auth = useAuthStore()
 
-const mode = ref('login')
 const loading = ref(false)
 const form = reactive({
   username: '',
-  display_name: '',
   password: '',
-  role: 'OPERATOR',
 })
 
 async function submit() {
   loading.value = true
   try {
-    if (mode.value === 'login') {
-      await auth.login(form.username, form.password)
-      ElMessage.success('登录成功')
-      router.push(route.query.redirect || '/dashboard')
-    } else {
-      await auth.register({
-        username: form.username,
-        display_name: form.display_name || form.username,
-        password: form.password,
-        role: form.role,
-      })
-      ElMessage.success('注册成功，已自动登录')
-      await auth.login(form.username, form.password)
-      router.push('/dashboard')
-    }
+    await auth.login(form.username, form.password)
+    ElMessage.success('登录成功')
+    router.push(route.query.redirect || '/dashboard')
   } finally {
     loading.value = false
   }
@@ -43,7 +28,6 @@ async function submit() {
 function fillDemo(u, p) {
   form.username = u
   form.password = p
-  form.display_name = u
 }
 </script>
 
@@ -54,38 +38,24 @@ function fillDemo(u, p) {
 
     <div class="login-card">
       <div class="brand">
-        <div class="brand-mark">SOG</div>
+        <img class="brand-mark" src="/logo.jpg" alt="SOG" />
         <div class="brand-text">
           <div class="brand-title">离散装配生产作业支援系统</div>
           <div class="brand-subtitle">Shop-floor Operation Guide</div>
         </div>
       </div>
 
-      <div class="switch">
-        <div class="switch-tab" :class="{ active: mode === 'login' }" @click="mode = 'login'">登录</div>
-        <div class="switch-tab" :class="{ active: mode === 'register' }" @click="mode = 'register'">注册</div>
-        <div class="switch-bar" :style="{ transform: mode === 'login' ? 'translateX(0)' : 'translateX(100%)' }"></div>
-      </div>
+      <div class="form-title">账号登录</div>
 
       <el-form :model="form" label-position="top" class="form" @submit.prevent="submit">
         <el-form-item label="用户名">
           <el-input v-model="form.username" placeholder="请输入用户名" size="large" />
         </el-form-item>
-        <el-form-item v-if="mode === 'register'" label="显示名称">
-          <el-input v-model="form.display_name" placeholder="可选，默认使用用户名" size="large" />
-        </el-form-item>
         <el-form-item label="密码">
           <el-input v-model="form.password" type="password" placeholder="请输入密码" show-password size="large" />
         </el-form-item>
-        <el-form-item v-if="mode === 'register'" label="角色">
-          <el-select v-model="form.role" size="large" style="width: 100%">
-            <el-option label="管理员 ADMIN" value="ADMIN" />
-            <el-option label="计划员 MANAGER" value="MANAGER" />
-            <el-option label="操作工 OPERATOR" value="OPERATOR" />
-          </el-select>
-        </el-form-item>
         <el-button type="primary" size="large" class="submit" :loading="loading" @click="submit">
-          {{ mode === 'login' ? '登 录' : '注 册' }}
+          登 录
         </el-button>
       </el-form>
 
@@ -111,7 +81,7 @@ function fillDemo(u, p) {
         </div>
       </div>
 
-      <div class="footer">© SOG · 离散装配生产作业支援系统</div>
+      <div class="footer">© DELV-SOG · 离散装配生产作业支援系统</div>
     </div>
   </div>
 </template>
@@ -151,45 +121,20 @@ function fillDemo(u, p) {
 .brand { display: flex; align-items: center; gap: 14px; margin-bottom: 28px; }
 .brand-mark {
   width: 52px; height: 52px;
-  background: linear-gradient(135deg, #2b7cff, #6ca6ff);
   border-radius: 14px;
-  display: flex; align-items: center; justify-content: center;
-  color: #fff; font-weight: 800; font-size: 16px;
+  object-fit: cover;
   box-shadow: 0 8px 24px rgba(43, 124, 255, 0.35);
 }
 .brand-title { font-size: 18px; font-weight: 700; color: #1b2a40; }
 .brand-subtitle { font-size: 12px; color: #5a6d86; letter-spacing: 1px; }
 
-.switch {
-  position: relative;
-  display: flex;
-  background: #eaf2ff;
-  border-radius: 10px;
-  padding: 4px;
-  margin-bottom: 24px;
-}
-.switch-tab {
-  flex: 1;
-  text-align: center;
-  padding: 8px 0;
-  font-size: 14px;
-  font-weight: 500;
-  color: #5a6d86;
-  cursor: pointer;
-  z-index: 1;
-  transition: color 0.2s;
-}
-.switch-tab.active { color: #1a5cd8; }
-.switch-bar {
-  position: absolute;
-  top: 4px; left: 4px;
-  width: calc(50% - 4px);
-  height: calc(100% - 8px);
-  background: #fff;
-  border-radius: 7px;
-  box-shadow: 0 2px 8px rgba(27, 42, 64, 0.1);
-  transition: transform 0.25s ease;
-  z-index: 0;
+.form-title {
+  font-size: 16px;
+  font-weight: 600;
+  color: #1b2a40;
+  margin-bottom: 20px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid #eaf2ff;
 }
 
 .form :deep(.el-form-item__label) { font-size: 13px; color: #1b2a40; font-weight: 500; padding-bottom: 4px; }
