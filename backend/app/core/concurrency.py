@@ -16,7 +16,7 @@ T = TypeVar("T")
 # 全局阻塞任务线程池（数量由 worker_threads 控制）
 _thread_pool = ThreadPoolExecutor(
     max_workers=settings.worker_threads,
-    thread_name_prefix="sog-worker",
+    thread_name_prefix="delv-sog-worker",
 )
 
 # 异步并发限流信号量

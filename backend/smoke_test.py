@@ -1,4 +1,4 @@
-"""SOG 后端端到端冒烟测试（接口层）。
+"""DELV-SOG 后端端到端冒烟测试（接口层）。
 
 运行：python smoke_test.py
 """

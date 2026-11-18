@@ -7,7 +7,7 @@ class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8", extra="ignore")
 
     # 应用
-    app_name: str = "SOG 离散装配生产作业支援系统"
+    app_name: str = "DELV-SOG 离散装配生产作业支援系统"
     app_env: str = "dev"
     app_host: str = "0.0.0.0"
     app_port: int = 8000
@@ -16,9 +16,9 @@ class Settings(BaseSettings):
     # PostgreSQL 18
     db_host: str = "127.0.0.1"
     db_port: int = 5432
-    db_name: str = "sog"
-    db_user: str = "sog"
-    db_password: str = "sog_pass"
+    db_name: str = "delv_sog"
+    db_user: str = "delv_sog"
+    db_password: str = "delv_sog_pass"
     db_pool_size: int = 20
     db_max_overflow: int = 30
     db_pool_recycle: int = 1800

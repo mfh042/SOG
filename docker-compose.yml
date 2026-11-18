@@ -1,12 +1,12 @@
 services:
   postgres:
     image: postgres:18-alpine
-    container_name: sog-postgres
+    container_name: delv-sog-postgres
     restart: unless-stopped
     environment:
-      POSTGRES_DB: sog
-      POSTGRES_USER: sog
-      POSTGRES_PASSWORD: sog_pass
+      POSTGRES_DB: delv_sog
+      POSTGRES_USER: delv_sog
+      POSTGRES_PASSWORD: delv_sog_pass
       TZ: Asia/Shanghai
     ports:
       - "5432:5432"
@@ -20,19 +20,19 @@ services:
       - -c
       - shared_buffers=256MB
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U sog -d sog"]
+      test: ["CMD-SHELL", "pg_isready -U delv_sog -d delv_sog"]
       interval: 5s
       timeout: 3s
       retries: 10
       start_period: 5s
     networks:
-      - sog-net
+      - delv-sog-net
 
   backend:
     build:
       context: ./backend
       dockerfile: Dockerfile
-    container_name: sog-backend
+    container_name: delv-sog-backend
     restart: unless-stopped
     depends_on:
       postgres:
@@ -41,9 +41,9 @@ services:
       APP_ENV: prod
       DB_HOST: postgres
       DB_PORT: 5432
-      DB_NAME: sog
-      DB_USER: sog
-      DB_PASSWORD: sog_pass
+      DB_NAME: delv_sog
+      DB_USER: delv_sog
+      DB_PASSWORD: delv_sog_pass
       DB_POOL_SIZE: 20
       DB_MAX_OVERFLOW: 30
       CORS_ORIGINS: http://localhost,http://localhost:80,http://127.0.0.1
@@ -59,13 +59,13 @@ services:
       retries: 5
       start_period: 20s
     networks:
-      - sog-net
+      - delv-sog-net
 
   frontend:
     build:
       context: ./front
       dockerfile: Dockerfile
-    container_name: sog-frontend
+    container_name: delv-sog-frontend
     restart: unless-stopped
     depends_on:
       - backend
@@ -77,13 +77,13 @@ services:
       timeout: 3s
       retries: 3
     networks:
-      - sog-net
+      - delv-sog-net
 
   frontend-dev:
     build:
       context: ./front
       dockerfile: Dockerfile.dev
-    container_name: sog-frontend-dev
+    container_name: delv-sog-frontend-dev
     restart: unless-stopped
     profiles: ["dev"]
     depends_on:
@@ -96,12 +96,12 @@ services:
     environment:
       - NODE_ENV=development
     networks:
-      - sog-net
+      - delv-sog-net
 
 volumes:
   pgdata:
   uploads-data:
 
 networks:
-  sog-net:
+  delv-sog-net:
     driver: bridge

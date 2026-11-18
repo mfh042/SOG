@@ -26,6 +26,7 @@ const menus = computed(() => [
       { path: '/system/users', label: '用户管理', perm: 'material:read' },
       { path: '/system/roles', label: '角色授权', perm: 'material:read' },
       { path: '/system/logs', label: '审计日志', perm: 'admin:audit' },
+      { path: '/system/integration', label: '集成配置', perm: 'admin:audit' },
     ],
   },
   {
@@ -104,7 +105,7 @@ function handleLogout() {
 
       <div class="logo">
         <div class="logo-mark">
-          <img src="/logo.jpg" alt="SOG" class="logo-img" />
+          <img src="/logo.jpg" alt="DELV-SOG" class="logo-img" />
         </div>
         <div class="logo-text-group">
           <div class="logo-text">生产作业支援系统</div>

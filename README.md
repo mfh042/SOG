@@ -36,13 +36,21 @@ dev/
 │       │   ├── quality/         # 检验类型字典 + 检验登记 + 不良代码独立字典
 │       │   ├── device/          # 设备直连骨架（OPC-UA / MQTT 协议模板）
 │       │   ├── sop/             # SOP 作业指导（产品+工序+版本 + 媒体上传 + 图片标注）
-│       │   ├── dashboard/       # 看板聚合（概览 KPI / 齐套告警）
-│       │   └── migrations/schema.sql # PostgreSQL 18 DDL（幂等）
+│       │   └── dashboard/       # 看板聚合（概览 KPI / 齐套告警）
+│       ├── integration/         # 外部系统集成框架（适配器模式，独立运行 + 集成模式双轨）
+│       │   ├── adapters/        # 适配器层：base / registry / http_base / local + 各系统适配器
+│       │   ├── adapters/vendors/ # 厂商适配：SAP S/4HANA OData / 金蝶云星空 / 用友 NC Cloud
+│       │   ├── sync/            # 同步任务：orders / materials / boms / inventory
+│       │   ├── config_store.py  # 集成配置持久化（DB 覆盖 .env，支持热重载）
+│       │   ├── service.py       # IntegrationService 核心服务
+│       │   ├── models.py        # integration_config + external_id_mapping + sync_job
+│       │   └── router.py        # /api/integration/* 管理接口
+│       └── migrations/schema.sql # PostgreSQL 18 DDL（幂等）
 └── front/                       # Vue 3 前端（Vite）
     ├── package.json
     ├── vite.config.js           # /api 和 /uploads 代理到后端
     └── src/
-        ├── api/                 # axios 封装 + 各模块接口（auth / materials / boms / orders / production / quality / sop / devices / auditLogs / inspectTypes / roles）
+        ├── api/                 # axios 封装 + 各模块接口（auth / materials / boms / orders / production / quality / sop / devices / auditLogs / inspectTypes / roles / integration）
         ├── components/
         │   └── AnnotationEditor.vue  # 独立的 Canvas 图片标注编辑器（箭头/矩形/圆形/文字）
         ├── layouts/MainLayout.vue
@@ -63,7 +71,7 @@ dev/
             ├── InventoryView.vue    # 库存总览
             ├── inventory/           # 物料/消耗品/在制品管理中心
             ├── orders/              # 订单生产 / 订单调整 / 订单监控
-            └── system/              # 用户管理 / 角色授权（RBAC 可编辑矩阵） / 操作日志（真实 API 接入）
+            └── system/              # 用户管理 / 角色授权（RBAC 可编辑矩阵） / 操作日志（真实 API 接入） / 集成配置（外部系统对接）
 ```
 
 后端分层约定：`router`（参数校验 / 响应序列化）→ `service`（业务规则 / 状态机 / 事务）→ `repository`（SQL 与行级锁）→ `models`（ORM 表定义）；请求级会话由 `core.deps.get_db` 注入。业务模块之间不互相 import service，只通过 repository / session 解耦。
@@ -148,6 +156,21 @@ docker compose up -d --build
 | `JWT_ALGORITHM` | `HS256` | 签名算法 |
 | `JWT_ACCESS_EXPIRE_MINUTES` | `120` | Access Token 有效期（分钟） |
 
+### 5.1 外部系统集成配置
+
+SOG 支持与 **SAP / 金蝶 / 用友 / 通用 ERP / MES / PLM / WMS** 对接，所有集成参数通过 `.env` 或前端「集成配置」页面管理：
+
+| 变量 | 默认 | 说明 |
+|---|---|---|
+| `INTEGRATION_MODE` | `LOCAL` | `LOCAL`=独立运行 / `INTEGRATED`=集成模式 |
+| `{SYSTEM}_ENABLED` | `false` | 是否启用对应外部系统（如 `SAP_ENABLED`） |
+| `{SYSTEM}_BASE_URL` | 空 | 接口地址 |
+| `{SYSTEM}_API_KEY` | 空 | API Key / Token |
+| `{SYSTEM}_USERNAME` / `{SYSTEM}_PASSWORD` | 空 | 账号密码（部分系统需要） |
+| `{SYSTEM}_SYNC_INTERVAL` | `60` | 同步间隔（分钟） |
+
+> 前端「系统管理 → 集成配置」页面可视化编辑所有参数，修改后**立即生效**（运行时覆盖 `.env` 默认值，无需重启服务）。所有数据源可独立选择：订单 / 物料主数据 / BOM / 实时库存 —— 每类数据选择 LOCAL 自建或指定外部系统获取。
+
 ### 6. 鉴权（JWT）
 
 系统已落地 **JWT Bearer 鉴权**，密码哈希使用 **PBKDF2-HMAC-SHA256**。
@@ -219,6 +242,13 @@ SOP 模块已扩展支持**图片/PDF/视频**三种媒体类型上传，以及�
 | GET | `/api/inspect-types` | 检验类型字典（7 种分类 × 4 种抽样策略） |
 | GET | `/api/devices` | 设备直连骨架（OPC-UA / MQTT 协议模板） |
 | GET | `/api/audit-logs` | 审计日志（关键操作自动记录） |
+| GET | `/api/integration/health` | 外部系统健康检查（返回各适配器连通性） |
+| GET | `/api/integration/config` | 获取集成配置完整视图（系统参数 + 数据来源选择） |
+| POST | `/api/integration/config` | 批量保存集成配置（运行时热生效） |
+| POST | `/api/integration/config/{key}/reset` | 重置单条配置为 .env 默认值 |
+| POST | `/api/integration/data-source` | 设置某类数据的来源（LOCAL / ERP / SAP 等） |
+| POST | `/api/integration/sync/{system}` | 手动触发指定系统全量同步 |
+| GET | `/api/integration/jobs` | 同步任务历史列表 |
 
 **CSV 编码自动兼容：** UTF-8-sig（Excel 默认导出）→ GBK（兼容中文系统），UTF-8 直读。
 
@@ -239,6 +269,7 @@ SOP 模块已扩展支持**图片/PDF/视频**三种媒体类型上传，以及�
 13. **追溯**：`GET /api/production/trace/forward/{product_batch}`、`/backward/{material_batch}`、`/tree/{product_batch}`、`/bfs/{product_batch}?max_depth=4` 查四条路径。
 14. **RBAC 角色权限**：系统管理 → 角色授权 → 勾选权限矩阵 → 保存后权限立即生效（`require_perm` 实时查 DB）。
 15. **审计日志**：系统管理 → 操作日志 → 真实 API 接入，多条件过滤、分页。
+16. **集成配置（外部系统对接）**：系统管理 → 集成配置 → 查看 4 类数据的来源选择（默认 LOCAL 独立运行）；如需对接 SAP/金蝶/用友，展开对应系统面板 → 填写启用开关和连接参数 → 保存即生效 → 点击「测试连接」验证 → 点击「全量同步」拉取外部数据；同步历史在右侧面板实时查看。
 
 ---
 

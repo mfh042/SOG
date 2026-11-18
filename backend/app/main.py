@@ -1,4 +1,4 @@
-"""SOG 后端入口。
+"""DELV-SOG 后端入口。
 
 启动：uvicorn app.main:app --loop selector --host 0.0.0.0 --port 8000
 高并发部署：gunicorn -k uvicorn.workers.UvicornWorker -w 4 app.main:app
@@ -25,6 +25,7 @@ from app.core.concurrency import shutdown_threadpool
 from app.core.db import AsyncSessionLocal, engine
 from app.core.exceptions import register_exception_handlers
 from app.core.response import Resp
+from app.integration.router import router as integration_router
 from app.modules.auth.crypto import hash_password
 from app.modules.auth.models import AppUser
 from app.modules.auth.router import router as auth_router
@@ -41,11 +42,12 @@ from app.modules.quality.router import router as quality_router
 from app.modules.sop.models import Sop, SopTemplate
 from app.modules.sop.router import router as sop_router
 
-logger = logging.getLogger("sog")
+logger = logging.getLogger("delv-sog")
 
 
 async def _init_db():
     """自动建表 + 种子数据（幂等，可反复执行）。"""
+    import app.integration.models  # noqa: F401
     import app.modules.auth.models  # noqa: F401  让 Base.metadata 注册
     import app.modules.bom.models  # noqa: F401
     import app.modules.material.models  # noqa: F401
@@ -544,6 +546,7 @@ app.include_router(audit_router)
 app.include_router(bom_router)
 app.include_router(dashboard_router)
 app.include_router(device_router)
+app.include_router(integration_router)
 app.include_router(quality_router)
 app.include_router(order_router)
 app.include_router(material_router)

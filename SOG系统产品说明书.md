@@ -2,9 +2,9 @@
 
 | 项目 | 内容 |
 |---|---|
-| 文档版本 | V2.3（RBAC 权限持久化 + 物料/BOM CSV 导入 + 检验类型字典 + 审计日志 + 设备骨架） |
+| 文档版本 | V2.4（RBAC 权限持久化 + 物料/BOM CSV 导入 + 检验类型字典 + 审计日志 + 设备骨架 + **外部系统集成框架（SAP/金蝶/用友适配器 + 前端可视化配置）**） |
 | 编制日期 | 2026-11-17 |
-| 对应系统版本 | sog-system 0.4.0（FastAPI + Vue 3 + PostgreSQL 18 · JWT + RBAC + CSV 导入 + 检验类型 + 审计 + 设备） |
+| 对应系统版本 | sog-system 0.5.0（FastAPI + Vue 3 + PostgreSQL 18 · JWT + RBAC + CSV 导入 + 检验类型 + 审计 + 设备 + **集成框架**） |
 | 文档类型 | 产品说明书 / 技术方案（对外可交付） |
 | 状态标记 | ✅ 已实现并验证　◐ 部分实现　○ 规划中（本期未实现） |
 | 合并来源 | `architecture.md`、`SOG 离散装配生产作业支援系统技术方案.md`、`SOG系统产品说明书.md`（内容已全部并入本文） |
@@ -136,7 +136,7 @@ SOG 系统核心能力
 │   ├── 库存管理（批次级台账、流水、安全库存预警）                   ✅（inventory / transactions / low-stock）
 │   ├── BOM 维护（父子件、单机用量、版本、损耗率）                   ✅（头/行 CRUD + 激活版本切换 + CSV 导入）
 │   ├── BOM CSV 批量导入（自动关联物料编码、支持多版本）              ✅（POST /api/boms/import）
-│   └── 数据来源：系统内创建 或 外部协同获取                        ✅ 系统内创建 + CSV 导入　○ 外部同步
+│   └── 数据来源：系统内创建 或 外部协同获取                        ✅ 系统内创建 + CSV 导入 + **集成框架**（SAP/金蝶/用友/通用适配器）
 ├── ② 齐套管理（BOM × 订单 → 物料需求展开）
 │   ├── BOM 齐套检查（按 BOM 版本 + 订单量 + 损耗率展开需求）        ✅（GET /api/boms/shortage/{bom_id}?qty=N）
 │   ├── 齐套结果分级（齐套 / 缺料 + 缺料清单）                      ✅
@@ -150,7 +150,7 @@ SOG 系统核心能力
 │   ├── 草稿编辑乐观锁（?version=）                                 ✅
 │   ├── 释放生成工单（按订单行拆工单、幂等防重）                     ✅
 │   ├── CSV 批量导入                                                ✅（POST /api/orders/import）
-│   └── 数据来源：系统内创建 或 外部协同获取                        ✅ 系统内创建 + CSV 导入　○ ERP / 协同平台同步
+│   └── 数据来源：系统内创建 或 外部协同获取                        ✅ 系统内创建 + CSV 导入 + **集成框架**（SAP/金蝶/用友/通用适配器）
 ├── ④ 生产管理
 │   ├── 工单创建 / 状态流转（PLANNED→RELEASED→RUNNING→DONE） ✅
 │   ├── 工序路由（route，JSONB，默认 5 道工序）          ✅
@@ -176,7 +176,7 @@ SOG 系统核心能力
     ├── ⑧ 生产总览看板（KPI / 趋势 / 分布）              ✅（后端聚合接口 ✅ / 前端 DashboardView ✅）
     ├── ⑨ 审计日志（关键操作自动记录）                    ✅（audit 模块 + 前端 LogsView）
     ├── ⑩ 设备直连骨架（OPC-UA / MQTT 协议模板）          ✅（device 模块 + 前端 DeviceView）
-    ├── ⑪ 集成与设备接入（ERP / MES / PLC / 拧紧 / 扫码） ○
+    ├── ⑪ 集成与设备接入（ERP / MES / PLM / WMS / SAP / 金蝶 / 用友） ✅ 集成框架已实现（适配器模式 + 厂商适配 + 前端可视化配置）　○ PLC / 拧紧 / 扫码
     └── ⑫ JWT + RBAC 鉴权                               ✅（HS256 + PBKDF2 + role_permission 持久化 + 前端可编辑权限矩阵）
 ```
 
@@ -350,6 +350,7 @@ flowchart TB
 | SOP 作业指导 | `/api/sops` | SOP 创建（按产品+工序，发布时自动停用旧版）、列表、详情、**按产品工序直接查询 `/for-operation/{product_code}/{operation_seq}`**、**媒体上传 + 图片交互式标注**、更新、停用、**SOP 模板体系（内置 7 套）**、**动态 SOP `/dynamic/{product_code}`** |
 | 看板 | `/api/dashboard` | 概览 KPI、齐套告警 |
 | 设备直连骨架 | `/api/devices` | OPC-UA / MQTT 协议模板、默认节点/主题示例（前端 DeviceView 展示） |
+| **外部系统集成** | `/api/integration` | **适配器模式集成框架**：基础适配器 + 注册表 + HTTP 基类 + Local（独立运行）+ 通用 ERP/MES/PLM/WMS + **SAP S/4HANA（OData V2）** + **金蝶云星空（REST OpenAPI）** + **用友 NC Cloud（AK/SK 签名）**；**集成配置持久化**（`integration_config` 表覆盖 `.env`，运行时热生效）；**数据来源四选**（订单/物料/BOM/库存，每类可独立选 LOCAL 或指定外部系统）；**同步任务追踪**（`sync_job` 表记录状态、数据量、错误）；**外部 ID 映射**（`external_id_mapping` 表存外部 ID ↔ 本地记录）；健康检查、手动同步、配置读写、前端可视化配置页 `/system/integration` |
 
 **已实现的关键闭环**（此前文档误标为规划态，实为已实现）：
 
@@ -364,6 +365,7 @@ flowchart TB
 - ✅ **报工领料**：报工可传 `materials` 明细，按 FIFO 或指定批次扣减原料，并为每个消耗批次写 `ISSUE_MATERIAL` 追溯事件
 - ✅ **末道工序自动入成品仓**：末道累计达计划量即完工，自动入库 + 生成成品批次号
 - ✅ **报工幂等**：`idempotency_key` 同键重复提交仅生效一次（返回「重复提交已忽略」）
+- ✅ **外部系统集成框架（适配器模式 + 厂商适配 + 前端可视化配置）**：后端 `app/integration/` 模块完整实现，前端 `/system/integration` 页面可视化配置；支持独立运行（LOCAL 模式，零外部依赖开箱即用）和集成模式（对接 SAP / 金蝶 / 用友 / 通用 ERP/MES/PLM/WMS）；配置持久化 + 热重载 + 数据来源四选 + 同步任务追踪 + 外部 ID 映射
 - ✅ **RBAC 权限持久化**：`role_permission` 表存实际值，启动时从硬编码种子初始化，`require_perm` 实时查 DB + 缓存失效，保存后权限立即生效
 - ✅ **检验类型字典**：`inspect_type` 表，前端 QualityView 下拉动态加载 7 种分类
 - ✅ **审计日志**：audit 模块，前端 LogsView 真实 API 接入（多条件过滤、分页）
@@ -527,37 +529,70 @@ sequenceDiagram
 - ○ 外部协同获取：预留 ERP / 协同平台推送接口（见 5.3A）。
 - 前端：列表/新建/编辑/流转/释放齐全，释放后展示缺料告警与生成工单数。
 
-### 5.3A 物料与订单的双来源接入（系统内创建 / 外部协同获取）○
+### 5.3A 物料与订单的双来源接入（系统内创建 / 外部协同获取）✅ 集成框架已实现
 
-**双来源原则**：物料主数据与销售订单**既可以在 SOG 内手工创建，也可以从外部系统（ERP / 供应商协同平台 / 集团主数据平台）同步获取**。两条入口写入同一张表，靠**来源标识**区分，避免主数据在两处各自演进、互相覆盖。
+**双来源原则**：物料主数据与销售订单**既可以在 SOG 内手工创建，也可以从外部系统（ERP / 供应商协同平台 / 集团主数据平台）同步获取**。两条入口写入同一张表，靠**外部 ID 映射 + 业务编码幂等**去重，避免主数据在两处各自演进、互相覆盖。
 
-**来源标识字段**（需在 `material` 与 `sales_order` 各补 3 个字段）：
+#### 当前已实现的集成架构（适配器模式）
 
-| 字段 | 说明 |
+**整体设计**：SOG 内置完整的**外部系统集成框架**（`backend/app/integration/`），支持"零外部依赖独立运行"和"对接外部系统集成模式"双轨切换：
+
+```
+SOG 集成框架架构
+├── adapters/                    # 适配器层（统一接口）
+│   ├── base.py                  # ExternalSystemAdapter 抽象基类
+│   ├── registry.py              # AdapterRegistry 注册表（动态发现）
+│   ├── http_base.py             # HttpAdapter 通用 HTTP 基类
+│   ├── local.py                 # LocalAdapter（独立运行模式，返回空数据）
+│   ├── erp.py / mes.py / plm.py / wms.py  # 通用系统适配器
+│   └── vendors/                 # 厂商特化适配
+│       ├── sap.py               # SapS4Adapter（OData V2 协议）
+│       ├── kingdee.py           # KingdeeAdapter（金蝶云星空 REST OpenAPI）
+│       └── yonyou.py            # YonyouAdapter（用友 NC Cloud AK/SK 签名）
+├── sync/                        # 同步逻辑（orders / materials / boms / inventory）
+├── config_store.py              # 配置持久化（DB 覆盖 .env，热重载）
+├── service.py                   # IntegrationService 核心服务
+├── models.py                    # integration_config + external_id_mapping + sync_job
+└── router.py                    # /api/integration/* 管理接口
+```
+
+**核心特性**：
+
+| 特性 | 实现 |
 |---|---|
-| `source_type` | `LOCAL`（系统内创建）/ `ERP` / `SUPPLIER` / `PDM`（外部来源） |
-| `source_ref` | 外部唯一键（ERP 物料号 / 订单号），用于幂等 upsert |
-| `synced_at` | 最近一次同步时间；`LOCAL` 记录为空 |
+| **适配器模式** | 所有外部系统实现统一接口：`test_connection()` / `fetch_orders()` / `fetch_materials()` / `fetch_boms()` / `fetch_inventory()`，新增系统只需实现接口并注册 |
+| **独立运行保障** | 默认 `LOCAL` 模式，所有业务模块正常运行，不依赖任何外部系统；外部系统全部关闭等同 LOCAL 模式 |
+| **配置驱动 + 热生效** | `.env` 提供默认值，`integration_config` 表存储运行时覆盖值；前端修改配置后调 `reload()` 立即生效，**无需重启服务** |
+| **数据来源四选** | 订单 / 物料主数据 / BOM / 实时库存 — 每类数据可**独立选择** `LOCAL` 自建或指定外部系统获取（SAP / 金蝶 / 用友 / ERP / MES / PLM / WMS） |
+| **幂等同步** | 同步任务按**业务编码**（订单号 / 物料编码）或**外部 ID 映射**去重，存在则更新、不存在则新增，绝不重复插入 |
+| **外部 ID 映射** | `external_id_mapping` 表维护外部系统 ID ↔ 本地记录的对应关系，支持按外部 ID 反查本地记录 |
+| **同步任务追踪** | `sync_job` 表记录每次同步的 system / data_type / status / records_created / records_updated / records_failed / error_message / started_at / finished_at |
+| **厂商协议适配** | SAP S/4HANA OData V2（Basic Auth + CSRF Token）、金蝶云星空 REST OpenAPI（动态 Token）、用友 NC Cloud（AK/SK HMAC-SHA256 签名） |
+| **前端可视化配置** | `/system/integration` 页面：数据来源下拉选择 + 8 个系统折叠面板 + 健康检查 + 测试连接 + 手动全量同步 + 同步任务历史 |
 
-**幂等 upsert 规则**（关键）：
+#### 配置持久化与数据源选择
 
-- 外部写入以 `(source_type, source_ref)` 为幂等键，**存在则更新、不存在则新增**，绝不重复插入。
-- 唯一键冲突处理：若本地已用同一 `code` 手工建过物料，外部同步到来时按 `code` 命中而非新建，并把 `source_type` 回填为外部来源，避免同一物料两条记录。
-- `LOCAL` 记录被外部来源覆盖时，可在 `attrs` 中保留本地补充字段（如现场工艺参数），同步只更新外部负责的字段（名称/规格/单位），不整行覆盖。
+**配置层级**（后者覆盖前者）：
 
-**同步方式**：
+```
+.env 默认值 → integration_config 表（运行时覆盖）→ 前端「集成配置」页面编辑保存
+```
 
-- **推送式**（推荐）：外部系统调 `POST /api/integration/materials/bulk`、`POST /api/integration/orders/bulk`，支持批量 upsert，返回「新增 / 更新 / 跳过 / 失败」四类计数。
-- **拉取式**：SOG 定时任务按 `source_ref` 增量拉取，适合对方无推送能力时。
-- **实时单条**：`POST /api/integration/orders` 适配单据量小的协同场景。
+**数据源选择 API**：`POST /api/integration/data-source` — body `{ data_type: "ORDERS", source: "SAP" }`，热重载立即生效。
 
-**冲突与治理**：
+**支持的数据源值**：`LOCAL` / `ERP` / `MES` / `PLM` / `WMS` / `SAP` / `KINGDEE` / `YONYOU`
 
-- 外部来源记录在 SOG 内**默认只读**（禁止界面编辑关键字段），需改主数据须回源系统修改后再同步，保证单一数据源。
-- `LOCAL` 记录允许在 SOG 内编辑，但若后续被外部同步命中同一 `code`，需人工确认归属，系统给出冲突提示。
-- 所有外部同步写操作记入 `audit_log`（来源系统、批次号、操作结果）。
+#### 未来规划（○）
 
-**与齐套的关系**：外部同步来的订单可直接参与齐套计算；若其物料尚未建 BOM，齐套结果为 `KIT_UNKNOWN`（见 5.4A），提示补建 BOM 而非误判为缺料。
+| 能力 | 状态 |
+|---|---|
+| `source_type/source_ref` 字段下沉到 material / sales_order 表 | ○（当前靠 external_id_mapping 独立表实现） |
+| 推送式接口（外部系统主动调 SOG bulk upsert） | ○（当前为拉取式） |
+| 增量同步（基于 synced_at 游标） | ○（当前为全量同步） |
+| 外部来源记录 SOG 内只读保护 | ○ |
+| 定时调度（APScheduler / Celery Beat） | ○（当前手动触发同步） |
+
+> 注：**独立运行 + 集成模式双轨、适配器架构、厂商协议适配、配置热生效、前端可视化页面**这些核心能力已全部落地并通过接口层验证。未来规划项属于深度扩展，不影响当前独立运行和基础对接能力。
 
 ### 5.4 物料主数据与 BOM ✅
 
@@ -1082,7 +1117,7 @@ flowchart TB
     QMS[QMS / EAM]
   end
   subgraph L3 [SOG]
-    ADAPTER[集成适配层<br/>REST / 消息 / 中间表 ○]
+    ADAPTER[集成适配层<br/>适配器模式 ✅ · SAP/金蝶/用友已适配 ✅ · 通用 ERP/MES/PLM/WMS ✅ · 独立运行模式 ✅]
     BIZ[业务内核<br/>订单·物料·生产·质量·追溯 ✅]
   end
   subgraph L2 [边缘层]
@@ -1121,7 +1156,20 @@ flowchart TB
 | 7 | **失败隔离** | 集成失败不阻断现场作业：本地先落库，异步重试 + 死信队列 + 人工重推 |
 | 8 | **可审计** | 每次交互记录请求体摘要、响应码、耗时、重试次数，保留 ≥ 180 天 |
 
-### 8.3 向上集成：ERP ○
+### 8.3 向上集成：ERP ✅ 适配器框架已实现（E1/E2/E3 订单/物料/BOM 拉取式已落地；E4~E8 回传接口规划中）
+
+SOG 内置**适配器模式集成框架**，已实现 SAP S/4HANA、金蝶云星空、用友 NC Cloud 三大主流厂商的协议适配，以及通用 ERP/MES/PLM/WMS 适配器。所有集成逻辑位于 `backend/app/integration/` 模块，独立于业务模块，通过 `ExternalSystemAdapter` 抽象基类统一接口，新增厂商只需实现 5 个标准方法并注册到 `AdapterRegistry`。
+
+#### 8.3.0 已实现的厂商适配器一览
+
+| 厂商 | 适配器类 | 协议 | 认证 | 核心接口 |
+|---|---|---|---|---|
+| SAP S/4HANA | `SapS4Adapter` | OData V2 | Basic Auth + CSRF Token | 订单 `/sap/opu/odata/sap/ZSOG_SRV/OrdersSet` · 物料 `/MaterialsSet` · BOM `/BomsSet` |
+| 金蝶云星空 | `KingdeeAdapter` | REST OpenAPI | 动态 Token（`/Kingdee.BOS.WebApi.ServicesStub.DynamicFormService.Login`） | 订单 `/Kingdee.BOS.WebApi.ServicesStub.DynamicFormService.Execute.common.kdsvc` |
+| 用友 NC Cloud | `YonyouAdapter` | REST API | AK/SK HMAC-SHA256 签名 | 订单 `/api/scm/so/v1/saleorders` · 物料 `/api/bd/material/v1/materials` |
+| 通用 ERP/MES/PLM/WMS | `ErpAdapter` 等 | REST（可配置） | API Key / Basic Auth | 可配置的 base_url + 通用 JSON 拉取 |
+
+> **独立运行保障**：所有外部系统默认 `enabled=false`，此时系统自动降级为 `LOCAL` 模式，前端集成配置页面上 4 类数据源默认显示「SOG 本地自建」，所有业务功能正常可用。外部系统的接入是**可选增强**而非必要前提。
 
 #### 8.3.1 场景与接口
 

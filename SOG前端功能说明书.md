@@ -4,9 +4,9 @@
 |---|---|
 | 技术栈 | Vue 3 + Vite + Pinia + Element Plus + Axios |
 | 源码路径 | `E:\999-Dev\04-SOG\dev\front` |
-| 页面数量 | 26 个视图组件（含子目录） |
-| API 封装 | 13 个模块（`src/api/`） |
-| 文档版本 | V2.0（2026-11-17） |
+| 页面数量 | 27 个视图组件（含子目录） |
+| API 封装 | 14 个模块（`src/api/`） |
+| 文档版本 | V2.1（2026-11-17 · 新增集成配置） |
 
 ---
 
@@ -32,6 +32,7 @@ front/src/
 │   ├── devices.js               设备注册 + 协议模板查询
 │   ├── auditLogs.js             审计日志列表 + 动作枚举
 │   ├── roles.js                 listRoles / getCatalog / saveRolePermissions
+│   ├── integration.js           集成配置：健康检查 / 配置读写 / 数据源选择 / 手动同步 / 任务历史
 │   └── dashboard.js             看板聚合 KPI
 ├── layouts/MainLayout.vue       主布局（侧边栏菜单 + 顶栏 + 内容区）
 ├── components/
@@ -54,7 +55,7 @@ front/src/
     │   ├── InventoryHub.vue         物料管理中心 / 消耗品管理中心（通过 stockType props 切换）
     │   ├── WipHub.vue               在制品管理中心（WIP 看板 + 龄期 + 瓶颈）
     │   └── StockTxnView.vue         批次与流水（异动全链路追踪）
-    └── system/                  系统子目录（User / Roles / Logs）
+    └── system/                  系统子目录（User / Roles / Logs / IntegrationConfig）
 ```
 
 ---
@@ -105,7 +106,8 @@ router.beforeEach(async (to) => {
 🔐 系统管理
    ├── 用户管理                     → /system/users
    ├── 角色授权                     → /system/roles
-   └── 审计日志                     → /system/logs
+   ├── 审计日志                     → /system/logs
+   └── 集成配置                     → /system/integration
 
 📋 主数据管理
    ├── 物料主数据                   → /materials
@@ -183,6 +185,50 @@ router.beforeEach(async (to) => {
 | 分页 | 服务端分页（page / size） |
 | 动作标签着色 | 绿色=成功 / 红色=失败 / 蓝色=变更 / 灰色=读取 |
 | 权限 | `admin:audit` |
+
+### 4.4A 集成配置 `/system/integration` — `IntegrationConfig.vue`
+
+**SOG 与外部系统对接的一站式配置中心**，支持独立运行 + 集成模式双轨切换。
+
+#### 数据来源配置（顶部面板）
+
+| 功能 | 实现 |
+|---|---|
+| 四类数据独立选择来源 | 订单 / 物料主数据 / BOM / 实时库存 — 每类通过 `el-select` 下拉选择 `SOG 本地自建` 或指定外部系统（SAP / 金蝶 / 用友 / 通用 ERP / MES / PLM / WMS） |
+| 切换即时生效 | 选择后立即调 `POST /api/integration/data-source`，后端热重载配置，无需重启 |
+| 来源状态提示 | `LOCAL` 显示绿色 "当前使用 SOG 本地数据"，外部来源显示蓝色 "来自 XXX" |
+
+#### 外部系统连接配置（中部可折叠面板）
+
+| 功能 | 实现 |
+|---|---|
+| 8 个系统面板 | LOCAL / SAP / KINGDEE / YONYOU / ERP / MES / PLM / WMS，`el-collapse accordion` 手风琴展开 |
+| 每系统字段 | 启用开关 / 接口地址 / API Key（密码输入框）/ 用户名 / 密码 / 同步间隔（数字） |
+| 启用状态标签 | 面板标题上显示「已启用」/「未启用」+ 连接正常/失败状态标签 |
+| 单字段重置 | DB 覆盖值旁显示 🔄 图标，点击重置为 `.env` 默认值（确认弹窗） |
+| 测试连接 | 调 `GET /api/integration/health`，成功/失败 ElMessage 反馈 |
+| 全量同步 | 调 `POST /api/integration/sync/{system}`，二次确认后执行，结果写入右侧任务历史 |
+| 批量保存 | 点击「保存所有配置」调 `POST /api/integration/config`，后端热生效 |
+| 刷新 | 从后端拉取最新配置视图 |
+
+#### 右侧面板
+
+| 面板 | 内容 |
+|---|---|
+| 系统状态 | 当前集成模式（独立运行 / 集成模式）+ 各外部系统连接健康度 |
+| 最近同步任务 | `GET /api/integration/jobs` 返回的最近 20 条任务，展示系统 / 数据类型 / 状态（成功/进行中/失败）/ 创建更新记录数 / 开始时间 |
+
+**数据源下拉 label 映射：**
+
+| 值 | 显示名称 |
+|---|---|
+| `LOCAL` | SOG 本地自建 |
+| `ERP` / `MES` / `PLM` / `WMS` | 通用 ERP / MES / PLM / WMS |
+| `SAP` | SAP S/4HANA |
+| `KINGDEE` | 金蝶云星空/苍穹 |
+| `YONYOU` | 用友 NC Cloud/YonBIP |
+
+**权限**：`admin:audit`
 
 ---
 
@@ -486,6 +532,7 @@ Tab 四合一操作台：
 | `devices.js` | `/api/devices` | GET list + POST create + GET protocols |
 | `auditLogs.js` | `/api/audit-logs` | GET list + GET actions |
 | `roles.js` | `/api/auth` | GET roles + GET permissions/catalog + PUT roles/{role}/permissions |
+| `integration.js` | `/api/integration` | GET health + GET config + POST config + POST config/{key}/reset + POST data-source + POST sync/{system} + GET jobs |
 | `dashboard.js` | `/api/dashboard` | GET overview + GET shortage-alerts |
 
 ---

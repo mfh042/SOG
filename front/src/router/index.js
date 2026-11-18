@@ -13,6 +13,7 @@ const routes = [
       { path: 'system/users', name: 'system-users', component: () => import('@/views/system/UserView.vue'), meta: { title: '用户管理', perm: 'material:read' } },
       { path: 'system/roles', name: 'system-roles', component: () => import('@/views/system/RolesView.vue'), meta: { title: '角色授权', perm: 'material:read' } },
       { path: 'system/logs', name: 'system-logs', component: () => import('@/views/system/LogsView.vue'), meta: { title: '审计日志', perm: 'admin:audit' } },
+      { path: 'system/integration', name: 'system-integration', component: () => import('@/views/system/IntegrationConfig.vue'), meta: { title: '集成配置', perm: 'admin:audit' } },
       { path: 'materials', name: 'materials', component: () => import('@/views/MaterialView.vue'), meta: { title: '物料主数据', perm: 'material:read' } },
       { path: 'boms', name: 'boms', component: () => import('@/views/BomView.vue'), meta: { title: 'BOM 清单', perm: 'bom:read' } },
       { path: 'inventory/hub', name: 'inventory-hub', component: () => import('@/views/inventory/InventoryHub.vue'), props: { stockType: 'MATERIAL' }, meta: { title: '物料管理中心', perm: 'inventory:all' } },
@@ -45,7 +46,7 @@ const router = createRouter({ history: createWebHistory(), routes })
 
 router.beforeEach(async (to) => {
   if (to.meta.public) return true
-  const token = localStorage.getItem('sog_token')
+  const token = localStorage.getItem('delv_sog_token')
   if (!token) {
     return { name: 'login', query: { redirect: to.fullPath } }
   }

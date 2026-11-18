@@ -18,7 +18,7 @@ app.use(router)
 app.use(ElementPlus)
 
 const auth = useAuthStore()
-const existingUser = JSON.parse(localStorage.getItem('sog_user') || 'null')
+const existingUser = JSON.parse(localStorage.getItem('delv_sog_user') || 'null')
 if (auth.token && (!existingUser || existingUser.role === 'OPERATOR')) {
   auth.refreshUser().catch(() => {})
 }

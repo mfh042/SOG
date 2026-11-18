@@ -38,7 +38,7 @@ function fillDemo(u, p) {
 
     <div class="login-card">
       <div class="brand">
-        <img class="brand-mark" src="/logo.jpg" alt="SOG" />
+        <img class="brand-mark" src="/logo.jpg" alt="DELV-SOG" />
         <div class="brand-text">
           <div class="brand-title">离散装配生产作业支援系统</div>
           <div class="brand-subtitle">Shop-floor Operation Guide</div>

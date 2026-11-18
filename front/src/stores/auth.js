@@ -38,8 +38,8 @@ const ROLE_PERMISSIONS = {
 }
 
 export const useAuthStore = defineStore('auth', () => {
-  const token = ref(localStorage.getItem('sog_token') || '')
-  const user = ref(JSON.parse(localStorage.getItem('sog_user') || 'null'))
+  const token = ref(localStorage.getItem('delv_sog_token') || '')
+  const user = ref(JSON.parse(localStorage.getItem('delv_sog_user') || 'null'))
 
   const isLoggedIn = computed(() => !!token.value)
 
@@ -52,7 +52,7 @@ export const useAuthStore = defineStore('auth', () => {
   async function login(username, password) {
     const res = await apiLogin({ username, password })
     token.value = res.access_token
-    localStorage.setItem('sog_token', res.access_token)
+    localStorage.setItem('delv_sog_token', res.access_token)
     await refreshUser()
     return res
   }
@@ -67,26 +67,26 @@ export const useAuthStore = defineStore('auth', () => {
         role: me.role,
         station_code: me.station_code,
       }
-      localStorage.setItem('sog_user', JSON.stringify(user.value))
+      localStorage.setItem('delv_sog_user', JSON.stringify(user.value))
     } catch (e) {
       user.value = null
-      localStorage.removeItem('sog_user')
+      localStorage.removeItem('delv_sog_user')
       token.value = ''
-      localStorage.removeItem('sog_token')
+      localStorage.removeItem('delv_sog_token')
       throw e
     }
   }
 
   function setUser(u) {
     user.value = u
-    localStorage.setItem('sog_user', JSON.stringify(u))
+    localStorage.setItem('delv_sog_user', JSON.stringify(u))
   }
 
   function logout() {
     token.value = ''
     user.value = null
-    localStorage.removeItem('sog_token')
-    localStorage.removeItem('sog_user')
+    localStorage.removeItem('delv_sog_token')
+    localStorage.removeItem('delv_sog_user')
   }
 
   return { token, user, isLoggedIn, hasPerm, login, setUser, refreshUser, logout }

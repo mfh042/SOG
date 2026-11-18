@@ -72,7 +72,7 @@ ON CONFLICT (code) DO UPDATE SET
 
 
 def main():
-    conn = psycopg.connect("postgresql://postgres:123456@127.0.0.1:5432/sog")
+    conn = psycopg.connect("postgresql://postgres:123456@127.0.0.1:5432/delv_sog")
     cur = conn.cursor()
     cur.execute(MIGRATION)
     print("✅ Migration applied: inspect_type, qi extensions, audit_log")

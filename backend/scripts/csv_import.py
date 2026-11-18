@@ -132,7 +132,7 @@ def main():
         if arg.startswith("--bom-product"):
             is_bom = True
 
-    conn = psycopg.connect("postgresql://postgres:123456@127.0.0.1:5432/sog")
+    conn = psycopg.connect("postgresql://postgres:123456@127.0.0.1:5432/delv_sog")
     try:
         if is_bom:
             rows = parse_bom_csv(path)
